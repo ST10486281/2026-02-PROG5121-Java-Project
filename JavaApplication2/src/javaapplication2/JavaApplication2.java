@@ -30,7 +30,7 @@ public class JavaApplication2 {
         System.out.print("Enter your name: ");
         String name = input.nextLine();
 
-        System.out.println("Hello " + name);
+        System.out.println("\nHello \t" + name);
     }
 
     // int methodExample(){
