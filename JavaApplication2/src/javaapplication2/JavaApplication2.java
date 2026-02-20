@@ -4,18 +4,23 @@ import java.util.Scanner;
 
 public class JavaApplication2 {
 
-    public static void main(String[] args) {
+    // Properties (instance variables)
+    private String name;
+    private int age;
 
+ 
+
+    public static void main(String[] args) {
+        JavaApplication2 app = new JavaApplication2();
+       
         Scanner input = new Scanner(System.in);
 
         System.out.print("Enter your name: ");
-        String name = input.nextLine();
+        name = input.nextLine();
 
         System.out.print("Enter your age: ");
-        int age = input.nextInt();
-
-        System.out.println("\nHello " + name + "! You are " + age + " years old!");
-
-        input.close();
+        age = input.nextInt();
+       
+        System.out.println("Hello " + name + "! You are " + age + " years old!");
     }
 }
