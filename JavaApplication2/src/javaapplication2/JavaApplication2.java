@@ -1,28 +1,31 @@
-package javaapplication2;
-
 import java.util.Scanner;
 
 public class JavaApplication2 {
 
-    // Properties (instance variables)
-    private String name;
-    private int age;
-
-    private Scanner input = new Scanner(System.in);
-
-    public void UserInputCode() {
-
-        System.out.print("Enter your name: ");
-        name = input.nextLine();
-
-        System.out.print("Enter your age: ");
-        age = input.nextInt();
-
-        System.out.println("Hello " + name + "! You are " + age + " years old!");
-    }
-
     public static void main(String[] args) {
-        JavaApplication2 app = new JavaApplication2();
-        app.UserInputCode();
+        Scanner scanner = new Scanner(System.in);
+
+        double total = 0;
+
+        for (int i = 1; i <= 3; i++) {
+            System.out.println("Item " + i);
+
+            System.out.print("Enter price: ");
+            double price = scanner.nextDouble();
+
+            System.out.print("Enter quantity: ");
+            int quantity = scanner.nextInt();
+
+            double itemTotal = price * quantity;
+            total += itemTotal;
+
+            System.out.println("Item " + i + " total: R" + itemTotal);
+            System.out.println();
+        }
+
+        System.out.println("----- Checkout Breakdown -----");
+        System.out.println("Grand Total: R" + total);
+
+        scanner.close();
     }
 }
