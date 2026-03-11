@@ -1,3 +1,5 @@
+package fpsjframe;
+
 import java.util.*;
 
 public class TreeAscii {
@@ -39,19 +41,16 @@ public class TreeAscii {
 			growBranch(ex, ey, angle + wobble * 0.3, childLen * 0.75, depth + 1, maxDepth, new Random(rng.nextLong()));
 	}
 
-	/** Returns 1 if tree, 0 if air */
 	public int get(int x, int y) {
 		if (x < 0 || x >= W || y < 0 || y >= H)
 			return 0;
 		return grid[y][x];
 	}
 
-	/** True if this cell is part of the tree */
 	public boolean isTree(int x, int y) {
 		return get(x, y) == 1;
 	}
 
-	/** Print to console as 0/1 grid — optional utility */
 	public void print() {
 		for (int y = 0; y < H; y++) {
 			StringBuilder sb = new StringBuilder();
@@ -59,12 +58,5 @@ public class TreeAscii {
 				sb.append(grid[y][x]);
 			System.out.println(sb);
 		}
-	}
-
-	/** Quick test */
-	public static void main(String[] args) {
-		long seed = args.length > 0 ? Long.parseLong(args[0]) : 42;
-		TreeAscii tree = new TreeAscii(20, 10, seed);
-		tree.print();
 	}
 }

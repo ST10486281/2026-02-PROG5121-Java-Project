@@ -29,106 +29,38 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	// 3 = twig
 	private byte[][][] voxels = new byte[WORLD_Z][WORLD_H][WORLD_W];
 
-	// ── FRACTAL TREE GROWER (true 3D) ─────────────────────────────
-	// Grows a branch from (ox,oy,oz) in direction (dx,dy,dz).
-	// Each step stamps a voxel. At the end, spawns child branches.
-	// depth: 0=trunk, 1=main branch, 2=secondary, 3=twig, 4=fine twig
-	private void growBranch(double ox, double oy, double oz,
-			double dx, double dy, double dz,
-			double length, int depth, int maxDepth, Random rng) {
-		if (depth > maxDepth || length < 0.4)
-			return;
-
-		byte type = (depth == 0) ? (byte) 1 : (depth == 1) ? (byte) 1 : (depth <= 3) ? (byte) 2 : (byte) 3;
-		double step = 0.35;
-		double traveled = 0;
-
-		// Normalise direction
-		double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-		if (len < 0.001)
-			return;
-		dx /= len;
-		dy /= len;
-		dz /= len;
-
-		while (traveled <= length) {
-			int cx = (int) Math.round(ox + dx * traveled);
-			int cy = (int) Math.round(oy + dy * traveled);
-			int cz = (int) Math.round(oz + dz * traveled);
-			if (cx >= 1 && cx < WORLD_W - 1 && cy >= 1 && cy < WORLD_H - 1 && cz >= 0 && cz < WORLD_Z) {
-				// Only overwrite with thicker type (lower number = thicker)
-				if (type < voxels[cz][cy][cx] || voxels[cz][cy][cx] == 0)
-					voxels[cz][cy][cx] = type;
+	// ── TREEASCII-DRIVEN VOXEL STAMPER ───────────────────────────
+	// TreeAscii gives a 2D side-view (X=radius, Y=height).
+	// We revolve it around the trunk axis to get a rotationally symmetric 3D tree.
+	private void growTree(int centreX, int centreY, long seed) {
+		int TW = 20, TH = WORLD_Z;
+		TreeAscii skeleton = new TreeAscii(TW, TH, seed);
+		int midX = TW / 2; // centre column = trunk
+		for (int sy = 0; sy < TH; sy++) {
+			int worldZ = (TH - 1) - sy; // flip Y: top of skeleton = top of tree
+			for (int sx = 0; sx < TW; sx++) {
+				if (!skeleton.isTree(sx, sy))
+					continue;
+				int radius = Math.abs(sx - midX);
+				byte type = (radius <= 1) ? (byte) 1 : (byte) 2;
+				if (radius == 0) {
+					stamp(centreX, centreY, worldZ, type);
+				} else {
+					// Revolve: stamp a ring of voxels at this radius in XY
+					for (double a = 0; a < Math.PI * 2; a += 0.3) {
+						int wx = centreX + (int) Math.round(Math.cos(a) * radius);
+						int wy = centreY + (int) Math.round(Math.sin(a) * radius);
+						stamp(wx, wy, worldZ, type);
+					}
+				}
 			}
-			traveled += step;
-		}
-
-		// End point
-		double ex = ox + dx * length, ey = oy + dy * length, ez = oz + dz * length;
-
-		// Child branch parameters
-		double childLen = length * (0.58 + rng.nextDouble() * 0.15);
-		double spread = 0.5 + rng.nextDouble() * 0.3; // radians of spread in 3D
-		double wobble = (rng.nextDouble() - 0.5) * 0.25;
-
-		// Compute a perpendicular plane for spreading children
-		// Use two vectors perpendicular to the current direction
-		double[] perp1 = perpendicular(dx, dy, dz);
-		double[] perp2 = cross(dx, dy, dz, perp1[0], perp1[1], perp1[2]);
-
-		// Left child — rotated by -spread in perp1 plane
-		double[] c1 = rotateDir(dx, dy, dz, perp1[0], perp1[1], perp1[2], -spread + wobble);
-		growBranch(ex, ey, ez, c1[0], c1[1], c1[2], childLen, depth + 1, maxDepth, rng);
-
-		// Right child — rotated by +spread
-		double[] c2 = rotateDir(dx, dy, dz, perp1[0], perp1[1], perp1[2], spread + wobble);
-		growBranch(ex, ey, ez, c2[0], c2[1], c2[2], childLen, depth + 1, maxDepth, rng);
-
-		// Occasional forward continuation (60% chance for depth < 3)
-		if (depth < 3 && rng.nextDouble() < 0.6) {
-			double[] c3 = rotateDir(dx, dy, dz, perp2[0], perp2[1], perp2[2], wobble * 0.5);
-			growBranch(ex, ey, ez, c3[0], c3[1], c3[2], childLen * 0.75, depth + 1, maxDepth, rng);
 		}
 	}
 
-	// Grow a tree at world position (tx, ty), trunk base at z=0
-	private void growTree(int tx, int ty, long seed) {
-		Random rng = new Random(seed);
-		// Trunk: straight up (0,0,1) with slight random lean
-		double leanX = (rng.nextDouble() - 0.5) * 0.15;
-		double leanY = (rng.nextDouble() - 0.5) * 0.15;
-		growBranch(tx, ty, 0, leanX, leanY, 1.0, 4.0 + rng.nextDouble() * 1.0, 0, 3, rng);
-	}
-
-	// ── 3D VECTOR HELPERS ─────────────────────────────────────────
-	private double[] perpendicular(double dx, double dy, double dz) {
-		// Find a vector perpendicular to (dx,dy,dz)
-		double[] ref = (Math.abs(dx) < 0.9) ? new double[] { 1, 0, 0 } : new double[] { 0, 1, 0 };
-		return normalise(cross(dx, dy, dz, ref[0], ref[1], ref[2]));
-	}
-
-	private double[] cross(double ax, double ay, double az, double bx, double by, double bz) {
-		return new double[] { ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx };
-	}
-
-	private double[] normalise(double[] v) {
-		double l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-		if (l < 0.0001)
-			return new double[] { 0, 0, 1 };
-		return new double[] { v[0] / l, v[1] / l, v[2] / l };
-	}
-
-	// Rotate direction d around axis a by angle theta (Rodrigues)
-	private double[] rotateDir(double dx, double dy, double dz,
-			double ax, double ay, double az, double theta) {
-		double c = Math.cos(theta), s = Math.sin(theta);
-		double dot = dx * ax + dy * ay + dz * az;
-		double[] cross = cross(ax, ay, az, dx, dy, dz);
-		return new double[] {
-				dx * c + cross[0] * s + ax * dot * (1 - c),
-				dy * c + cross[1] * s + ay * dot * (1 - c),
-				dz * c + cross[2] * s + az * dot * (1 - c)
-		};
+	private void stamp(int wx, int wy, int wz, byte type) {
+		if (wx >= 1 && wx < WORLD_W - 1 && wy >= 1 && wy < WORLD_H - 1 && wz >= 0 && wz < WORLD_Z)
+			if (type < voxels[wz][wy][wx] || voxels[wz][wy][wx] == 0)
+				voxels[wz][wy][wx] = type;
 	}
 
 	// ── CELL QUERY ────────────────────────────────────────────────
