@@ -9,112 +9,147 @@ import java.util.*;
 public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 	private final int nScreenWidth = 800, nScreenHeight = 600;
-	private double fPlayerX = 5.0, fPlayerY = 15.0, fPlayerAngle = 0.0;
+
+	// Player position in 3D world
+	private double fPlayerX = 5.0, fPlayerY = 15.0;
+	private double fPlayerZ = 0.5; // eye height (world units)
+	private double fPlayerAngle = 0.0;
 	private final double fFOV = Math.PI / 3.0;
 	private final double fDepth = 32.0, fSpeed = 5.0;
 	private boolean[] keys = new boolean[256];
 
-	// ── WORLD: single 30x30 open biome with one fractal tree ──────
-	private static final int WORLD_W = 30, WORLD_H = 30;
+	// ── 3D VOXEL WORLD ────────────────────────────────────────────
+	// World is WORLD_W × WORLD_H tiles in XY, WORLD_Z voxels tall in Z
+	private static final int WORLD_W = 30, WORLD_H = 30, WORLD_Z = 16;
 
-	// ── FRACTAL TREE OVERLAY ──────────────────────────────────────
-	// Maps world cell (wx,wy) → branch depth (0=trunk, 1=main, 2=secondary, 3=twig)
-	// We store depth so we can render each level at the correct height
-	private HashMap<Long, Integer> treeOverlay = new HashMap<>();
+	// Voxel grid: voxels[z][y][x] = cell type
+	// 0 = air
+	// 1 = bark (trunk/thick branch)
+	// 2 = thin branch
+	// 3 = twig
+	private byte[][][] voxels = new byte[WORLD_Z][WORLD_H][WORLD_W];
 
-	private static long cellKey(int wx, int wy) {
-		return ((long) (wy + 500)) * 10000 + (wx + 500);
-	}
-
-	// ── FRACTAL BRANCH GROWER ─────────────────────────────────────
-	// The raycaster is 2D — height is purely visual (wall strip height ∝
-	// 1/distance).
-	// A "tall" object = a world cell the ray hits up close.
-	// Strategy: trunk is 1 cell. Branches spread radially in world XY from the
-	// trunk,
-	// each branch arm is a line of cells. Branch depth controls rendered height
-	// (scale).
-	// The WHOLE TREE is a 2D footprint of cells at different depths.
-
-	private void growBranch(double ox, double oy, double angle, double length,
-			int depth, int maxDepth, Random rng) {
-		if (depth > maxDepth || length < 0.5)
+	// ── FRACTAL TREE GROWER (true 3D) ─────────────────────────────
+	// Grows a branch from (ox,oy,oz) in direction (dx,dy,dz).
+	// Each step stamps a voxel. At the end, spawns child branches.
+	// depth: 0=trunk, 1=main branch, 2=secondary, 3=twig, 4=fine twig
+	private void growBranch(double ox, double oy, double oz,
+			double dx, double dy, double dz,
+			double length, int depth, int maxDepth, Random rng) {
+		if (depth > maxDepth || length < 0.4)
 			return;
 
-		double dx = Math.cos(angle), dy = Math.sin(angle);
-		double step = 0.4;
+		byte type = (depth == 0) ? (byte) 1 : (depth == 1) ? (byte) 1 : (depth <= 3) ? (byte) 2 : (byte) 3;
+		double step = 0.35;
 		double traveled = 0;
+
+		// Normalise direction
+		double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+		if (len < 0.001)
+			return;
+		dx /= len;
+		dy /= len;
+		dz /= len;
 
 		while (traveled <= length) {
 			int cx = (int) Math.round(ox + dx * traveled);
 			int cy = (int) Math.round(oy + dy * traveled);
-			if (cx >= 1 && cx < WORLD_W - 1 && cy >= 1 && cy < WORLD_H - 1) {
-				long key = cellKey(cx, cy);
-				// Only overwrite if this depth is shallower (trunk wins over twig)
-				int existing = treeOverlay.getOrDefault(key, 999);
-				if (depth < existing)
-					treeOverlay.put(key, depth);
+			int cz = (int) Math.round(oz + dz * traveled);
+			if (cx >= 1 && cx < WORLD_W - 1 && cy >= 1 && cy < WORLD_H - 1 && cz >= 0 && cz < WORLD_Z) {
+				// Only overwrite with thicker type (lower number = thicker)
+				if (type < voxels[cz][cy][cx] || voxels[cz][cy][cx] == 0)
+					voxels[cz][cy][cx] = type;
 			}
 			traveled += step;
 		}
 
-		// End point of this branch
-		double ex = ox + dx * length, ey = oy + dy * length;
+		// End point
+		double ex = ox + dx * length, ey = oy + dy * length, ez = oz + dz * length;
 
-		// Spawn 2 child branches with spread + random wobble
-		double childLen = length * (0.60 + rng.nextDouble() * 0.15);
-		double spread = Math.PI / 4.5 + rng.nextDouble() * Math.PI / 9.0;
+		// Child branch parameters
+		double childLen = length * (0.58 + rng.nextDouble() * 0.15);
+		double spread = 0.5 + rng.nextDouble() * 0.3; // radians of spread in 3D
 		double wobble = (rng.nextDouble() - 0.5) * 0.25;
 
-		growBranch(ex, ey, angle - spread + wobble, childLen, depth + 1, maxDepth, rng);
-		growBranch(ex, ey, angle + spread + wobble, childLen, depth + 1, maxDepth, rng);
+		// Compute a perpendicular plane for spreading children
+		// Use two vectors perpendicular to the current direction
+		double[] perp1 = perpendicular(dx, dy, dz);
+		double[] perp2 = cross(dx, dy, dz, perp1[0], perp1[1], perp1[2]);
 
-		// 50% chance of a forward continuation branch (keeps tree from being pure
-		// Y-shape)
-		if (depth < 2 && rng.nextDouble() < 0.55) {
-			growBranch(ex, ey, angle + wobble * 0.5, childLen * 0.75, depth + 1, maxDepth, rng);
+		// Left child — rotated by -spread in perp1 plane
+		double[] c1 = rotateDir(dx, dy, dz, perp1[0], perp1[1], perp1[2], -spread + wobble);
+		growBranch(ex, ey, ez, c1[0], c1[1], c1[2], childLen, depth + 1, maxDepth, rng);
+
+		// Right child — rotated by +spread
+		double[] c2 = rotateDir(dx, dy, dz, perp1[0], perp1[1], perp1[2], spread + wobble);
+		growBranch(ex, ey, ez, c2[0], c2[1], c2[2], childLen, depth + 1, maxDepth, rng);
+
+		// Occasional forward continuation (60% chance for depth < 3)
+		if (depth < 3 && rng.nextDouble() < 0.6) {
+			double[] c3 = rotateDir(dx, dy, dz, perp2[0], perp2[1], perp2[2], wobble * 0.5);
+			growBranch(ex, ey, ez, c3[0], c3[1], c3[2], childLen * 0.75, depth + 1, maxDepth, rng);
 		}
 	}
 
-	// Grow a single tree centred at world position (tx, ty)
+	// Grow a tree at world position (tx, ty), trunk base at z=0
 	private void growTree(int tx, int ty, long seed) {
 		Random rng = new Random(seed);
-		// Trunk: 1 cell, depth 0
-		treeOverlay.put(cellKey(tx, ty), 10); // 10=trunk sentinel
-
-		// 4 main boughs radiating outward (N/S/E/W ± wobble), depth 1
-		double[] mainAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
-		for (double baseAngle : mainAngles) {
-			double angle = baseAngle + (rng.nextDouble() - 0.5) * 0.4;
-			double len = 2.5 + rng.nextDouble() * 1.5;
-			growBranch(tx, ty, angle, len, 1, 4, new Random(rng.nextLong()));
-		}
-		// 4 diagonal boughs for fullness
-		double[] diagAngles = { Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4 };
-		for (double baseAngle : diagAngles) {
-			double angle = baseAngle + (rng.nextDouble() - 0.5) * 0.3;
-			double len = 1.8 + rng.nextDouble() * 1.2;
-			growBranch(tx, ty, angle, len, 1, 3, new Random(rng.nextLong()));
-		}
+		// Trunk: straight up (0,0,1) with slight random lean
+		double leanX = (rng.nextDouble() - 0.5) * 0.15;
+		double leanY = (rng.nextDouble() - 0.5) * 0.15;
+		growBranch(tx, ty, 0, leanX, leanY, 1.0, 9.0 + rng.nextDouble() * 3, 0, 4, rng);
 	}
 
-	// ── CELL LOOKUP ───────────────────────────────────────────────
-	// Returns: -1=out of bounds, 0=open, 0–4=branch depth
-	private int getCell(int wx, int wy) {
-		if (wx <= 0 || wx >= WORLD_W - 1 || wy <= 0 || wy >= WORLD_H - 1)
-			return -1; // boundary wall
-		Integer v = treeOverlay.get(cellKey(wx, wy));
-		return (v != null) ? v : 0;
+	// ── 3D VECTOR HELPERS ─────────────────────────────────────────
+	private double[] perpendicular(double dx, double dy, double dz) {
+		// Find a vector perpendicular to (dx,dy,dz)
+		double[] ref = (Math.abs(dx) < 0.9) ? new double[] { 1, 0, 0 } : new double[] { 0, 1, 0 };
+		return normalise(cross(dx, dy, dz, ref[0], ref[1], ref[2]));
 	}
 
-	// Wall for collision: boundary and trunk only
+	private double[] cross(double ax, double ay, double az, double bx, double by, double bz) {
+		return new double[] { ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx };
+	}
+
+	private double[] normalise(double[] v) {
+		double l = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+		if (l < 0.0001)
+			return new double[] { 0, 0, 1 };
+		return new double[] { v[0] / l, v[1] / l, v[2] / l };
+	}
+
+	// Rotate direction d around axis a by angle theta (Rodrigues)
+	private double[] rotateDir(double dx, double dy, double dz,
+			double ax, double ay, double az, double theta) {
+		double c = Math.cos(theta), s = Math.sin(theta);
+		double dot = dx * ax + dy * ay + dz * az;
+		double[] cross = cross(ax, ay, az, dx, dy, dz);
+		return new double[] {
+				dx * c + cross[0] * s + ax * dot * (1 - c),
+				dy * c + cross[1] * s + ay * dot * (1 - c),
+				dz * c + cross[2] * s + az * dot * (1 - c)
+		};
+	}
+
+	// ── CELL QUERY ────────────────────────────────────────────────
+	private byte getVoxel(int x, int y, int z) {
+		if (x <= 0 || x >= WORLD_W - 1 || y <= 0 || y >= WORLD_H - 1)
+			return (byte) -1; // boundary
+		if (z < 0 || z >= WORLD_Z)
+			return 0;
+		return voxels[z][y][x];
+	}
+
+	// Solid for movement (only boundary + trunk base z=0 cells)
 	private boolean isSolid(double wx, double wy) {
-		int c = getCell((int) wx, (int) wy);
-		return c < 0 || c == 10; // boundary walls (-1) and trunk (10) block movement
+		int x = (int) wx, y = (int) wy;
+		if (x <= 0 || x >= WORLD_W - 1 || y <= 0 || y >= WORLD_H - 1)
+			return true;
+		return false; // player walks through branches freely
 	}
 
 	// ── GAME STATE ────────────────────────────────────────────────
-	private boolean bGameOver = false, bRunning = true;
+	private boolean bRunning = true;
 	private BufferedImage offscreen;
 	private Graphics2D offG;
 	private long lastTime = System.nanoTime();
@@ -122,10 +157,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 	// ── TEXTURES ─────────────────────────────────────────────────
 	private static final int TEX_W = 64, TEX_H = 64;
-	private int[] texGround = new int[TEX_W * TEX_H]; // dirt floor (reused for ground colour)
-	private int[] texBark = new int[TEX_W * TEX_H]; // trunk — dark ridged bark
-	private int[] texBough = new int[TEX_W * TEX_H]; // main branch — medium bark
-	private int[] texTwig = new int[TEX_W * TEX_H]; // secondary/twig — light smooth bark
+	private int[] texBark = new int[TEX_W * TEX_H]; // trunk & main branch
+	private int[] texTwig = new int[TEX_W * TEX_H]; // secondary/twig
 
 	public FPSJFrame() {
 		setPreferredSize(new Dimension(nScreenWidth, nScreenHeight));
@@ -135,11 +168,17 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		offscreen = new BufferedImage(nScreenWidth, nScreenHeight, BufferedImage.TYPE_INT_RGB);
 		offG = offscreen.createGraphics();
 		Random rng = new Random(42);
-		generateBarkTex(texBark, rng, 70, 42, 15, 3); // dark trunk
-		generateBarkTex(texBough, rng, 100, 62, 22, 2); // mid branch
-		generateBarkTex(texTwig, rng, 130, 85, 35, 1); // light twig
-		// Grow ONE tree at the centre of the world
+		generateBarkTex(texBark, rng, 75, 45, 18, 14);
+		generateBarkTex(texTwig, rng, 120, 80, 32, 8);
 		growTree(15, 15, 12345L);
+		// Count voxels
+		int count = 0;
+		for (int z = 0; z < WORLD_Z; z++)
+			for (int y = 0; y < WORLD_H; y++)
+				for (int x = 0; x < WORLD_W; x++)
+					if (voxels[z][y][x] > 0)
+						count++;
+		System.out.println("Tree voxels: " + count);
 		new Thread(this).start();
 	}
 
@@ -165,19 +204,16 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		return n;
 	}
 
-	// Parametric bark texture — ridged vertical grain, horizontal rings
-	private void generateBarkTex(int[] tex, Random rng, int baseR, int baseG, int baseB, int ringGap) {
+	private void generateBarkTex(int[] tex, Random rng, int br, int bg, int bb, int ring) {
 		float[] n = makeNoise(rng, 2);
 		for (int ty = 0; ty < TEX_H; ty++)
 			for (int tx = 0; tx < TEX_W; tx++) {
 				float v = n[ty * TEX_W + tx];
 				float ridge = (float) (0.5 + 0.5 * Math.sin(tx * 0.9 + v * 2.0));
-				int r = Math.min(255, (int) (baseR * (0.7 + 0.3 * ridge) + v * 20));
-				int g = Math.min(255, (int) (baseG * (0.7 + 0.3 * ridge) + v * 12));
-				int b = Math.min(255, (int) (baseB * (0.7 + 0.3 * ridge) + v * 8));
-				// Horizontal ring grooves
-				int ringSize = 8 + ringGap * 2;
-				if (ty % ringSize < 2) {
+				int r = Math.min(255, (int) (br * (0.7 + 0.3 * ridge) + v * 20));
+				int g = Math.min(255, (int) (bg * (0.7 + 0.3 * ridge) + v * 12));
+				int b = Math.min(255, (int) (bb * (0.7 + 0.3 * ridge) + v * 8));
+				if (ty % ring < 2) {
 					r = (int) (r * 0.6);
 					g = (int) (g * 0.6);
 					b = (int) (b * 0.6);
@@ -193,8 +229,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			long now = System.nanoTime();
 			double dt = (now - lastTime) / 1e9;
 			lastTime = now;
-			if (!bGameOver)
-				update(dt);
+			update(dt);
 			render();
 			repaint();
 			fps = 1.0 / dt;
@@ -232,135 +267,157 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			fPlayerX = nx;
 		if (!isSolid(fPlayerX, ny))
 			fPlayerY = ny;
+		if (keys[KeyEvent.VK_R]) {
+			fPlayerX = 5;
+			fPlayerY = 15;
+			fPlayerAngle = 0;
+		}
 	}
 
-	// ── RENDER ────────────────────────────────────────────────────
-	// Height scale per branch depth:
-	// 0 = trunk → 1.00 (full wall)
-	// 1 = main bough → 0.75
-	// 2 = secondary → 0.50
-	// 3 = twig → 0.30
-	// 4 = fine twig → 0.18
-	private static final double[] HEIGHT_SCALE = { 1.0, 0.75, 0.50, 0.30, 0.18, 0.12, 0.08, 0.08, 0.08, 0.08, 1.0 }; // index
-																														// 10=trunk
+	// ── 3D VOXEL RENDERER ─────────────────────────────────────────
+	// For each screen column x:
+	// 1. Cast ray in XY at angle
+	// 2. Step through XY cells using DDA
+	// 3. For each XY cell hit, scan Z levels 0..WORLD_Z-1
+	// 4. For each solid voxel at (cx,cy,cz), project its top and bottom faces
+	// to screen Y using: screenY = H/2 - (worldZ - eyeZ) * projDist / rayDist
+	// 5. Fill that screen column slice with the bark texture
+	// Track a per-pixel Y coverage array to avoid overwriting closer voxels.
 
 	private void render() {
-		// Sky — blue-grey
+		// Sky
 		for (int y = 0; y < nScreenHeight / 2; y++) {
 			float t = (float) y / (nScreenHeight / 2f);
-			int r = (int) (80 + 40 * t), g = (int) (120 + 50 * t), b = (int) (160 + 50 * t);
+			int r = (int) (80 + 40 * t), g = (int) (120 + 50 * t), b = (int) (155 + 50 * t);
 			for (int x = 0; x < nScreenWidth; x++)
 				offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 		}
-		// Floor — earthy
+		// Floor
 		for (int y = nScreenHeight / 2; y < nScreenHeight; y++) {
 			float t = (float) (y - nScreenHeight / 2) / (nScreenHeight / 2f);
-			int r = (int) (60 + 30 * t), g = (int) (45 + 20 * t), b = (int) (20 + 10 * t);
+			int r = (int) (55 + 25 * t), g = (int) (42 + 18 * t), b = (int) (18 + 8 * t);
 			for (int x = 0; x < nScreenWidth; x++)
 				offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 		}
+
+		// Projection constant: at distance 1, a 1-unit-tall object spans projDist
+		// pixels
+		double projDist = (nScreenHeight / 2.0) / Math.tan(fFOV / 2.0);
 
 		for (int x = 0; x < nScreenWidth; x++) {
 			double rayA = (fPlayerAngle - fFOV / 2.0) + ((double) x / nScreenWidth) * fFOV;
 			double eyeX = Math.cos(rayA), eyeY = Math.sin(rayA);
 
-			// March ray — collect ALL hits up to depth 8 (branches are see-through)
-			double[] hDist = new double[8];
-			int[] hDepth = new int[8];
-			int hCount = 0;
+			// DDA setup in XY
+			int mapX = (int) fPlayerX, mapY = (int) fPlayerY;
+			double deltaDistX = Math.abs(1.0 / eyeX), deltaDistY = Math.abs(1.0 / eyeY);
+			double sideDistX, sideDistY;
+			int stepX, stepY;
+			if (eyeX < 0) {
+				stepX = -1;
+				sideDistX = (fPlayerX - mapX) * deltaDistX;
+			} else {
+				stepX = 1;
+				sideDistX = (mapX + 1.0 - fPlayerX) * deltaDistX;
+			}
+			if (eyeY < 0) {
+				stepY = -1;
+				sideDistY = (fPlayerY - mapY) * deltaDistY;
+			} else {
+				stepY = 1;
+				sideDistY = (mapY + 1.0 - fPlayerY) * deltaDistY;
+			}
+
+			// Per-pixel Y floor: tracks lowest undrawn screen row (starts at 0=top)
+			// We draw front-to-back, so we fill from the top downward and skip already
+			// drawn pixels
+			int[] yFloor = new int[nScreenHeight]; // yFloor[screenY] = drawn? (use a simpler approach)
+			// Actually: track min/max already painted per screen column
+			// Use a boolean array: drawn[screenY] = true if already filled
+			boolean[] drawn = new boolean[nScreenHeight];
+
 			double dist = 0;
-			int lastCell = 0;
-			int lastCellX = -1, lastCellY = -1;
+			boolean hitBoundary = false;
 
-			while (dist < fDepth && hCount < 8) {
-				dist += 0.02;
-				int tx = (int) (fPlayerX + eyeX * dist), ty = (int) (fPlayerY + eyeY * dist);
-				if (tx == lastCellX && ty == lastCellY)
+			while (dist < fDepth && !hitBoundary) {
+				// Advance DDA
+				boolean sideX;
+				if (sideDistX < sideDistY) {
+					sideDistX += deltaDistX;
+					mapX += stepX;
+					sideX = true;
+					dist = sideDistX - deltaDistX;
+				} else {
+					sideDistY += deltaDistY;
+					mapY += stepY;
+					sideX = false;
+					dist = sideDistY - deltaDistY;
+				}
+
+				if (mapX <= 0 || mapX >= WORLD_W - 1 || mapY <= 0 || mapY >= WORLD_H - 1) {
+					hitBoundary = true;
+					break;
+				}
+
+				// Check all Z levels in this XY column
+				// Scan bottom to top so we draw higher voxels last (they appear higher on
+				// screen)
+				// Actually scan top to bottom in screen space: higher Z = higher on screen =
+				// smaller Y
+				// Draw back-to-front isn't needed here since each voxel occupies a distinct Z
+				// band.
+				// Just scan Z and compute screen projection for each solid voxel.
+
+				// Correct ray distance (perpendicular, not Euclidean — fish-eye correction)
+				double perpDist = sideX ? (sideDistX - deltaDistX) : (sideDistY - deltaDistY);
+				if (perpDist <= 0.001)
 					continue;
-				lastCellX = tx;
-				lastCellY = ty;
-				int cell = getCell(tx, ty);
-				if (cell < 0) { // boundary
-					hDist[hCount] = dist;
-					hDepth[hCount] = -1;
-					hCount++;
-					break;
-				}
-				if (cell == 10) { // TRUNK — opaque, stop
-					hDist[hCount] = dist;
-					hDepth[hCount] = 10;
-					hCount++;
-					break;
-				}
-				if (cell > 0 && cell != lastCell) { // branch cell (depth 1–4)
-					hDist[hCount] = dist;
-					hDepth[hCount] = cell;
-					hCount++;
-					lastCell = cell;
-					// keep marching — branches are semi-transparent
-				} else if (cell == 0 && lastCell > 0) {
-					lastCell = 0; // exited a branch region, reset so we can hit next
-				} else if (cell == 0) {
-					lastCell = 0;
-				}
 
-			}
+				// Face normal for lighting
+				float faceBright = sideX ? 1.0f : 0.72f;
+				float distBright = (float) Math.max(0.08, 1.0 - perpDist / fDepth);
+				float brightness = faceBright * distBright;
 
-			// Render each hit back-to-front
-			// Pre-compute screen bands
-			int[] cArr = new int[hCount], fArr = new int[hCount];
-			for (int hi = 0; hi < hCount; hi++) {
-				double d = hDist[hi];
-				int dep = hDepth[hi];
-				int c = (int) (nScreenHeight / 2.0 - nScreenHeight / d);
-				int f = nScreenHeight - c;
-				if (dep > 0 && dep < HEIGHT_SCALE.length) {
-					double sc = HEIGHT_SCALE[dep];
-					int wallH = f - c;
-					c = f - (int) (wallH * sc);
-				} else if (dep == -1) { // boundary
-					// full height
-				}
-				cArr[hi] = c;
-				fArr[hi] = f;
-			}
+				// Texture X from fractional hit position
+				double wallX = sideX ? (fPlayerY + perpDist * eyeY) : (fPlayerX + perpDist * eyeX);
+				wallX -= Math.floor(wallX);
+				int texX = (int) (wallX * TEX_W) & (TEX_W - 1);
 
-			for (int hi = hCount - 1; hi >= 0; hi--) {
-				double d = hDist[hi];
-				int dep = hDepth[hi];
-				if (dep == 0)
-					continue; // skip open air (shouldn't be in hits)
-				int ceiling = cArr[hi], floor = fArr[hi];
-				int[] tex = (dep == 10) ? texBark : (dep == 1) ? texBough : texTwig;
-				double hitX = fPlayerX + eyeX * d, hitY = fPlayerY + eyeY * d;
-				int texX;
-				if (Math.abs(eyeX) > Math.abs(eyeY))
-					texX = (int) ((hitY - Math.floor(hitY)) * TEX_W) & (TEX_W - 1);
-				else
-					texX = (int) ((hitX - Math.floor(hitX)) * TEX_W) & (TEX_W - 1);
-
-				float face = (Math.abs(eyeX) > Math.abs(eyeY)) ? 1.0f : 0.75f;
-				float distB = (float) Math.max(0.08, 1.0 - d / fDepth);
-				float bright = distB * face;
-
-				for (int y = ceiling; y <= floor && y < nScreenHeight; y++) {
-					if (y < 0)
+				for (int cz = WORLD_Z - 1; cz >= 0; cz--) {
+					byte vox = getVoxel(mapX, mapY, cz);
+					if (vox <= 0)
 						continue;
-					boolean occ = false;
-					for (int fhi = 0; fhi < hi; fhi++)
-						if (y >= cArr[fhi] && y <= fArr[fhi] && hDepth[fhi] > 0) {
-							occ = true;
-							break;
-						}
-					if (occ)
-						continue;
-					int texY = (int) (((y - ceiling) / (double) (floor - ceiling + 1)) * TEX_H) & (TEX_H - 1);
-					int tc = tex[texY * TEX_W + texX];
-					float fb = Math.max(0.08f, bright);
-					int r = Math.min(255, (int) (((tc >> 16) & 0xFF) * fb));
-					int g = Math.min(255, (int) (((tc >> 8) & 0xFF) * fb));
-					int b = Math.min(255, (int) ((tc & 0xFF) * fb));
-					offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
+
+					int[] tex = (vox == 1) ? texBark : texTwig;
+
+					// World Z of voxel top and bottom
+					double worldZTop = cz + 1.0;
+					double worldZBottom = cz;
+
+					// Project to screen Y (higher worldZ = higher on screen = lower screenY)
+					// screenY = H/2 - (worldZ - eyeZ) * projDist / perpDist
+					int screenYTop = (int) (nScreenHeight / 2.0 - (worldZTop - fPlayerZ) * projDist / perpDist);
+					int screenYBottom = (int) (nScreenHeight / 2.0 - (worldZBottom - fPlayerZ) * projDist / perpDist);
+
+					screenYTop = Math.max(0, screenYTop);
+					screenYBottom = Math.min(nScreenHeight - 1, screenYBottom);
+
+					for (int sy = screenYTop; sy <= screenYBottom; sy++) {
+						if (drawn[sy])
+							continue;
+						drawn[sy] = true;
+
+						// Texture Y from vertical position within voxel
+						double frac = (sy - screenYTop) / (double) Math.max(1, screenYBottom - screenYTop);
+						int texY = (int) (frac * TEX_H) & (TEX_H - 1);
+						int tc = tex[texY * TEX_W + texX];
+
+						float fb = Math.max(0.08f, brightness);
+						int r = Math.min(255, (int) (((tc >> 16) & 0xFF) * fb));
+						int g = Math.min(255, (int) (((tc >> 8) & 0xFF) * fb));
+						int b = Math.min(255, (int) ((tc & 0xFF) * fb));
+						offscreen.setRGB(x, sy, (r << 16) | (g << 8) | b);
+					}
 				}
 			}
 		}
@@ -370,13 +427,9 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	private void drawHUD(Graphics2D g) {
-		// FPS
 		g.setColor(new Color(220, 220, 220, 220));
 		g.setFont(new Font("Courier New", Font.PLAIN, 12));
-		g.drawString(
-				String.format("FPS:%.0f  pos:(%.1f,%.1f)  tree cells:%d", fps, fPlayerX, fPlayerY, treeOverlay.size()),
-				10, 20);
-		// Crosshair
+		g.drawString(String.format("FPS:%.0f  pos:(%.1f, %.1f)  eyeZ:%.1f", fps, fPlayerX, fPlayerY, fPlayerZ), 10, 20);
 		int cx = nScreenWidth / 2, cy = nScreenHeight / 2;
 		g.setColor(new Color(255, 255, 255, 200));
 		g.drawLine(cx - 10, cy, cx - 3, cy);
@@ -386,40 +439,31 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		g.setColor(new Color(180, 180, 180, 180));
 		g.setFont(new Font("Courier New", Font.PLAIN, 11));
 		g.drawString("WASD=move  Q/E=strafe  R=restart", 10, nScreenHeight - 10);
-		// Minimap
 		drawMiniMap(g);
 	}
 
 	private void drawMiniMap(Graphics2D g) {
-		int scale = 8, mW = WORLD_W * scale, mH = WORLD_H * scale;
-		// Too big — show at 4px per cell, top-right
-		int ps = 4;
-		int ox = nScreenWidth - WORLD_W * ps - 10, oy = 10;
+		int ps = 4, ox = nScreenWidth - WORLD_W * ps - 10, oy = 10;
 		g.setColor(new Color(0, 0, 0, 150));
 		g.fillRect(ox, oy, WORLD_W * ps, WORLD_H * ps);
-		// Draw tree cells
-		for (Map.Entry<Long, Integer> e : treeOverlay.entrySet()) {
-			long k = e.getKey();
-			int dep = e.getValue();
-			int wx = (int) ((k % 10000) - 500), wy = (int) ((k / 10000) - 500);
-			if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H)
-				continue;
-			g.setColor(dep == 0 ? new Color(60, 30, 10)
-					: dep == 1 ? new Color(100, 55, 20) : dep == 2 ? new Color(140, 80, 35) : new Color(170, 110, 50));
-			g.fillRect(ox + wx * ps, oy + wy * ps, ps, ps);
-		}
-		// Player
+		// Draw XY footprint of tree (any Z level)
+		for (int my = 0; my < WORLD_H; my++)
+			for (int mx = 0; mx < WORLD_W; mx++) {
+				byte best = 0;
+				for (int mz = 0; mz < WORLD_Z; mz++)
+					if (voxels[mz][my][mx] > 0 && (best == 0 || voxels[mz][my][mx] < best))
+						best = voxels[mz][my][mx];
+				if (best > 0) {
+					g.setColor(best == 1 ? new Color(80, 45, 15)
+							: best == 2 ? new Color(120, 70, 25) : new Color(160, 100, 40));
+					g.fillRect(ox + mx * ps, oy + my * ps, ps, ps);
+				}
+			}
 		int px = ox + (int) (fPlayerX * ps), py = oy + (int) (fPlayerY * ps);
 		g.setColor(Color.WHITE);
 		g.fillOval(px - 2, py - 2, 5, 5);
 		g.setColor(Color.YELLOW);
 		g.drawLine(px, py, (int) (px + Math.cos(fPlayerAngle) * 8), (int) (py + Math.sin(fPlayerAngle) * 8));
-	}
-
-	private void restart() {
-		fPlayerX = 5;
-		fPlayerY = 15;
-		fPlayerAngle = 0;
 	}
 
 	@Override
@@ -433,8 +477,6 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		int c = e.getKeyCode();
 		if (c < 256)
 			keys[c] = true;
-		if (c == KeyEvent.VK_R)
-			restart();
 	}
 
 	@Override
@@ -449,7 +491,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	public static void main(String[] args) {
-		JFrame f = new JFrame("Fractal Tree Skeleton");
+		JFrame f = new JFrame("3D Voxel Tree");
 		FPSJFrame game = new FPSJFrame();
 		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		f.add(game);
