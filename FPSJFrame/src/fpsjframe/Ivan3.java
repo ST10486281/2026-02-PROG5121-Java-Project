@@ -398,21 +398,21 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		g.fillRect(0, nScreenHeight - 80, nScreenWidth, 80);
 
 		// Health bar
-		g.setColor(new Color(60, 0, 0));
-		g.fillRect(20, nScreenHeight - 55, 200, 25);
-		g.setColor(nHealth > 50 ? new Color(200, 50, 50) : new Color(255, 0, 0));
-		g.fillRect(20, nScreenHeight - 55, (int) (nHealth * 2), 25);
-		g.setColor(Color.WHITE);
-		g.setFont(new Font("Courier New", Font.BOLD, 16));
-		g.drawString("HP: " + nHealth, 25, nScreenHeight - 35);
+		// g.setColor(new Color(60, 0, 0));
+		// g.fillRect(20, nScreenHeight - 55, 200, 25);
+		// g.setColor(nHealth > 50 ? new Color(200, 50, 50) : new Color(255, 0, 0));
+		// g.fillRect(20, nScreenHeight - 55, (int)(nHealth * 2), 25);
+		// g.setColor(Color.WHITE);
+		// g.setFont(new Font("Courier New", Font.BOLD, 16));
+		// g.drawString("HP: " + nHealth, 25, nScreenHeight - 35);
 
 		// Ammo
-		g.setColor(new Color(200, 180, 50));
-		g.setFont(new Font("Courier New", Font.BOLD, 16));
-		g.drawString("AMMO: " + nAmmo, nScreenWidth - 150, nScreenHeight - 35);
+		// g.setColor(new Color(200, 180, 50));
+		// g.setFont(new Font("Courier New", Font.BOLD, 16));
+		// g.drawString("AMMO: " + nAmmo, nScreenWidth - 150, nScreenHeight - 35);
 
 		// Weapon sprite (simple gun shape)
-		drawGun(g);
+		// drawGun(g);
 
 		// Crosshair
 		int cx = nScreenWidth / 2;
