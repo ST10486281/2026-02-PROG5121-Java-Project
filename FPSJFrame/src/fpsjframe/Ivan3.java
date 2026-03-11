@@ -4,101 +4,128 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
+import java.util.*;
 
 public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
-	private final int nScreenWidth = 800;
-	private final int nScreenHeight = 600;
-
-	private double fPlayerX = 5.0, fPlayerY = 5.0, fPlayerAngle = 0.0;
-	private double fFOV = Math.PI / 3.0;
-	private double fDepth = 24.0;
-	private double fSpeed = 5.0;
+	private final int nScreenWidth = 800, nScreenHeight = 600;
+	private double fPlayerX = 5.0, fPlayerY = 15.0, fPlayerAngle = 0.0;
+	private final double fFOV = Math.PI / 3.0;
+	private final double fDepth = 32.0, fSpeed = 5.0;
 	private boolean[] keys = new boolean[256];
 
-	// ── BIOME SYSTEM ──────────────────────────────────────────────
-	private static final int BIOME_COLS = 6, BIOME_ROWS = 6, TILE_SIZE = 10;
-	private static final int WORLD_W = BIOME_COLS * TILE_SIZE; // 60
-	private static final int WORLD_H = BIOME_ROWS * TILE_SIZE; // 60
+	// ── WORLD: single 30x30 open biome with one fractal tree ──────
+	private static final int WORLD_W = 30, WORLD_H = 30;
 
-	private int[][] biomeMap = {
-			{ 1, 1, 2, 2, 3, 3 }, { 1, 1, 2, 2, 3, 3 }, { 1, 2, 2, 3, 3, 2 },
-			{ 2, 2, 3, 3, 2, 1 }, { 3, 3, 2, 2, 1, 1 }, { 3, 3, 2, 1, 1, 1 },
-	};
+	// ── FRACTAL TREE OVERLAY ──────────────────────────────────────
+	// Maps world cell (wx,wy) → branch depth (0=trunk, 1=main, 2=secondary, 3=twig)
+	// We store depth so we can render each level at the correct height
+	private HashMap<Long, Integer> treeOverlay = new HashMap<>();
 
-	// 0=open 1=bush 2=tree-trunk-marker (expanded to 3x3 by getCell)
-	private int[][] biomeTiles1 = {
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-	};
-	private int[][] biomeTiles2 = {
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-	};
-	private int[][] biomeTiles3 = {
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 2, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 1, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 2, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 0, 0, 2 },
-			{ 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 0, 0, 0, 2, 0, 0 },
-	};
-
-	// ── CELL TYPES: 0=open 1=bush 2=trunk 3=leaves ────────────────
-	// A tree marker (2) in biomeTiles expands to a 3x3 voxel:
-	// centre cell = TRUNK (type 2), surrounding 8 cells = LEAVES (type 3)
-	private int getRawCell(int wx, int wy) {
-		if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H)
-			return 2;
-		int bx = wx / TILE_SIZE, by = wy / TILE_SIZE;
-		int tx = wx % TILE_SIZE, ty = wy % TILE_SIZE;
-		int biome = biomeMap[by][bx];
-		int[][] tiles = (biome == 1) ? biomeTiles1 : (biome == 2) ? biomeTiles2 : biomeTiles3;
-		return tiles[ty][tx];
+	private static long cellKey(int wx, int wy) {
+		return ((long) (wy + 500)) * 10000 + (wx + 500);
 	}
 
+	// ── FRACTAL BRANCH GROWER ─────────────────────────────────────
+	// The raycaster is 2D — height is purely visual (wall strip height ∝
+	// 1/distance).
+	// A "tall" object = a world cell the ray hits up close.
+	// Strategy: trunk is 1 cell. Branches spread radially in world XY from the
+	// trunk,
+	// each branch arm is a line of cells. Branch depth controls rendered height
+	// (scale).
+	// The WHOLE TREE is a 2D footprint of cells at different depths.
+
+	private void growBranch(double ox, double oy, double angle, double length,
+			int depth, int maxDepth, Random rng) {
+		if (depth > maxDepth || length < 0.5)
+			return;
+
+		double dx = Math.cos(angle), dy = Math.sin(angle);
+		double step = 0.4;
+		double traveled = 0;
+
+		while (traveled <= length) {
+			int cx = (int) Math.round(ox + dx * traveled);
+			int cy = (int) Math.round(oy + dy * traveled);
+			if (cx >= 1 && cx < WORLD_W - 1 && cy >= 1 && cy < WORLD_H - 1) {
+				long key = cellKey(cx, cy);
+				// Only overwrite if this depth is shallower (trunk wins over twig)
+				int existing = treeOverlay.getOrDefault(key, 999);
+				if (depth < existing)
+					treeOverlay.put(key, depth);
+			}
+			traveled += step;
+		}
+
+		// End point of this branch
+		double ex = ox + dx * length, ey = oy + dy * length;
+
+		// Spawn 2 child branches with spread + random wobble
+		double childLen = length * (0.60 + rng.nextDouble() * 0.15);
+		double spread = Math.PI / 4.5 + rng.nextDouble() * Math.PI / 9.0;
+		double wobble = (rng.nextDouble() - 0.5) * 0.25;
+
+		growBranch(ex, ey, angle - spread + wobble, childLen, depth + 1, maxDepth, rng);
+		growBranch(ex, ey, angle + spread + wobble, childLen, depth + 1, maxDepth, rng);
+
+		// 50% chance of a forward continuation branch (keeps tree from being pure
+		// Y-shape)
+		if (depth < 2 && rng.nextDouble() < 0.55) {
+			growBranch(ex, ey, angle + wobble * 0.5, childLen * 0.75, depth + 1, maxDepth, rng);
+		}
+	}
+
+	// Grow a single tree centred at world position (tx, ty)
+	private void growTree(int tx, int ty, long seed) {
+		Random rng = new Random(seed);
+		// Trunk: 1 cell, depth 0
+		treeOverlay.put(cellKey(tx, ty), 10); // 10=trunk sentinel
+
+		// 4 main boughs radiating outward (N/S/E/W ± wobble), depth 1
+		double[] mainAngles = { 0, Math.PI / 2, Math.PI, 3 * Math.PI / 2 };
+		for (double baseAngle : mainAngles) {
+			double angle = baseAngle + (rng.nextDouble() - 0.5) * 0.4;
+			double len = 2.5 + rng.nextDouble() * 1.5;
+			growBranch(tx, ty, angle, len, 1, 4, new Random(rng.nextLong()));
+		}
+		// 4 diagonal boughs for fullness
+		double[] diagAngles = { Math.PI / 4, 3 * Math.PI / 4, 5 * Math.PI / 4, 7 * Math.PI / 4 };
+		for (double baseAngle : diagAngles) {
+			double angle = baseAngle + (rng.nextDouble() - 0.5) * 0.3;
+			double len = 1.8 + rng.nextDouble() * 1.2;
+			growBranch(tx, ty, angle, len, 1, 3, new Random(rng.nextLong()));
+		}
+	}
+
+	// ── CELL LOOKUP ───────────────────────────────────────────────
+	// Returns: -1=out of bounds, 0=open, 0–4=branch depth
 	private int getCell(int wx, int wy) {
-		int raw = getRawCell(wx, wy);
-		if (raw != 0 && raw != 2)
-			return raw; // bush or boundary
-		if (raw == 2)
-			return 2; // trunk centre
-		// Check if any neighbour is a tree marker → this cell is leaves
-		for (int dy = -1; dy <= 1; dy++)
-			for (int dx = -1; dx <= 1; dx++)
-				if (!(dx == 0 && dy == 0) && getRawCell(wx + dx, wy + dy) == 2)
-					return 3;
-		return 0;
+		if (wx <= 0 || wx >= WORLD_W - 1 || wy <= 0 || wy >= WORLD_H - 1)
+			return -1; // boundary wall
+		Integer v = treeOverlay.get(cellKey(wx, wy));
+		return (v != null) ? v : 0;
 	}
 
+	// Wall for collision: boundary and trunk only
 	private boolean isSolid(double wx, double wy) {
 		int c = getCell((int) wx, (int) wy);
-		return c != 0;
+		return c < 0 || c == 0; // boundary walls and trunk block movement
 	}
 
-	// Enemy state (inactive)
-	private double[] enemyX = { 11.5, 5.5, 18.5 };
-	private double[] enemyY = { 11.5, 19.5, 4.5 };
-	private boolean[] enemyAlive = { true, true, true };
-	private int nEnemyCount = 3;
-
-	private int nHealth = 100, nAmmo = 30, nShootTimer = 0;
-	private boolean bShooting = false, bGameOver = false, bRunning = true;
-
+	// ── GAME STATE ────────────────────────────────────────────────
+	private boolean bGameOver = false, bRunning = true;
 	private BufferedImage offscreen;
 	private Graphics2D offG;
 	private long lastTime = System.nanoTime();
 	private double fps = 0;
 
 	// ── TEXTURES ─────────────────────────────────────────────────
-	// type 1=bush, 2=trunk, 3=leaves, else=brick/boundary
 	private static final int TEX_W = 64, TEX_H = 64;
-	private int[] texBrick = new int[TEX_W * TEX_H];
-	private int[] texBush = new int[TEX_W * TEX_H];
-	private int[] texTrunk = new int[TEX_W * TEX_H]; // oak bark
-	private int[] texLeaves = new int[TEX_W * TEX_H]; // minecraft leaf block
+	private int[] texGround = new int[TEX_W * TEX_H]; // dirt floor (reused for ground colour)
+	private int[] texBark = new int[TEX_W * TEX_H]; // trunk — dark ridged bark
+	private int[] texBough = new int[TEX_W * TEX_H]; // main branch — medium bark
+	private int[] texTwig = new int[TEX_W * TEX_H]; // secondary/twig — light smooth bark
 
 	public FPSJFrame() {
 		setPreferredSize(new Dimension(nScreenWidth, nScreenHeight));
@@ -107,16 +134,16 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		addKeyListener(this);
 		offscreen = new BufferedImage(nScreenWidth, nScreenHeight, BufferedImage.TYPE_INT_RGB);
 		offG = offscreen.createGraphics();
-		java.util.Random rng = new java.util.Random(42);
-		generateBrickTex(rng);
-		generateBushTex(rng);
-		generateTrunkTex(rng);
-		generateLeavesTex(rng);
+		Random rng = new Random(42);
+		generateBarkTex(texBark, rng, 70, 42, 15, 3); // dark trunk
+		generateBarkTex(texBough, rng, 100, 62, 22, 2); // mid branch
+		generateBarkTex(texTwig, rng, 130, 85, 35, 1); // light twig
+		// Grow ONE tree at the centre of the world
+		growTree(15, 15, 12345L);
 		new Thread(this).start();
 	}
 
-	// ── NOISE HELPER ─────────────────────────────────────────────
-	private float[] makeNoise(java.util.Random rng, int passes) {
+	private float[] makeNoise(Random rng, int passes) {
 		float[] n = new float[TEX_W * TEX_H];
 		for (int i = 0; i < n.length; i++)
 			n[i] = rng.nextFloat();
@@ -138,108 +165,24 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		return n;
 	}
 
-	private void generateBrickTex(java.util.Random rng) {
-		float[] n = makeNoise(rng, 3);
-		for (int ty = 0; ty < TEX_H; ty++)
-			for (int tx = 0; tx < TEX_W; tx++) {
-				float v = n[ty * TEX_W + tx];
-				int row = ty / 8, off = (row % 2 == 0) ? 0 : TEX_W / 2;
-				int bx = (tx + off) % TEX_W;
-				boolean mortar = (ty % 8 == 0) || (ty % 8 == 7) || (bx % 16 == 0) || (bx % 16 == 15);
-				int r, g, b;
-				if (mortar) {
-					int q = (int) (60 + v * 30);
-					r = q;
-					g = q;
-					b = q;
-				} else {
-					r = (int) (120 + v * 60);
-					g = (int) (55 + v * 30);
-					b = (int) (30 + v * 20);
-				}
-				texBrick[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
-			}
-	}
-
-	private void generateBushTex(java.util.Random rng) {
+	// Parametric bark texture — ridged vertical grain, horizontal rings
+	private void generateBarkTex(int[] tex, Random rng, int baseR, int baseG, int baseB, int ringGap) {
 		float[] n = makeNoise(rng, 2);
 		for (int ty = 0; ty < TEX_H; ty++)
 			for (int tx = 0; tx < TEX_W; tx++) {
 				float v = n[ty * TEX_W + tx];
-				int r = (int) (30 + v * 40), g = (int) (100 + v * 80), b = (int) (20 + v * 30);
-				if (v < 0.35f) {
+				float ridge = (float) (0.5 + 0.5 * Math.sin(tx * 0.9 + v * 2.0));
+				int r = Math.min(255, (int) (baseR * (0.7 + 0.3 * ridge) + v * 20));
+				int g = Math.min(255, (int) (baseG * (0.7 + 0.3 * ridge) + v * 12));
+				int b = Math.min(255, (int) (baseB * (0.7 + 0.3 * ridge) + v * 8));
+				// Horizontal ring grooves
+				int ringSize = 8 + ringGap * 2;
+				if (ty % ringSize < 2) {
 					r = (int) (r * 0.6);
 					g = (int) (g * 0.6);
 					b = (int) (b * 0.6);
 				}
-				if (tx % 16 == 7 || tx % 16 == 8) {
-					r = (int) (60 + v * 20);
-					g = (int) (40 + v * 20);
-					b = 10;
-				}
-				texBush[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
-			}
-	}
-
-	// Oak bark — vertical ridged grain, warm brown
-	private void generateTrunkTex(java.util.Random rng) {
-		float[] n = makeNoise(rng, 2);
-		for (int ty = 0; ty < TEX_H; ty++)
-			for (int tx = 0; tx < TEX_W; tx++) {
-				float v = n[ty * TEX_W + tx];
-				// Vertical ridges
-				float ridge = (float) (0.5 + 0.5 * Math.sin(tx * 0.9 + v * 1.5));
-				int r = (int) (80 + ridge * 50 + v * 20);
-				int g = (int) (50 + ridge * 30 + v * 15);
-				int b = (int) (20 + ridge * 10 + v * 8);
-				// Horizontal ring marks every ~12px
-				if (ty % 12 < 2) {
-					r = (int) (r * 0.7);
-					g = (int) (g * 0.7);
-					b = (int) (b * 0.7);
-				}
-				texTrunk[ty * TEX_W + tx] = (Math.min(255, r) << 16) | (Math.min(255, g) << 8) | Math.min(255, b);
-			}
-	}
-
-	// Minecraft oak leaves — pixel grid of leaf blocks with light/shadow faces
-	private void generateLeavesTex(java.util.Random rng) {
-		float[] n = makeNoise(rng, 1);
-		// Minecraft block size = 8px in a 64px texture = 8 blocks across
-		int BS = 8; // block size in pixels
-		for (int ty = 0; ty < TEX_H; ty++)
-			for (int tx = 0; tx < TEX_W; tx++) {
-				int bx = tx / BS, by = ty / BS; // which block
-				int lx = tx % BS, ly = ty % BS; // local within block
-				float v = n[(by * 8 + bx) % 64 * TEX_W + (bx * 7 + 11) % 64]; // stable per-block noise
-				v = n[ty * TEX_W + tx] * 0.3f + v * 0.7f; // mix in local noise too
-
-				// Base leaf green — varies per block for "clumpy" look
-				int baseG = (int) (80 + v * 60);
-				int baseR = (int) (20 + v * 25);
-				int baseB = (int) (10 + v * 15);
-
-				// Top face of block: brightest
-				// Side face (left/bottom border): darker — gives 3D cube feel
-				boolean topFace = ly < 2;
-				boolean leftFace = lx < 2;
-				boolean dark = ly >= BS - 1 || lx >= BS - 1; // bottom/right pixel = shadow
-
-				float bright = topFace ? 1.3f : leftFace ? 0.7f : dark ? 0.5f : 1.0f;
-				int r = Math.min(255, (int) (baseR * bright));
-				int g = Math.min(255, (int) (baseG * bright));
-				int b = Math.min(255, (int) (baseB * bright));
-
-				// Some blocks are "holes" (transparent) — about 20% for airy canopy feel
-				// Use stable per-block hash
-				int blockHash = (bx * 31 + by * 17 + 13) % 10;
-				if (blockHash < 2) { // ~20% transparent — store magic colour
-					r = 0;
-					g = 200;
-					b = 0; // chroma-key green = transparent
-				}
-
-				texLeaves[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
+				tex[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
 			}
 	}
 
@@ -265,9 +208,9 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 	private void update(double dt) {
 		if (keys[KeyEvent.VK_LEFT] || keys[KeyEvent.VK_A])
-			fPlayerAngle -= fSpeed * 0.5 * dt;
+			fPlayerAngle -= 2.0 * dt;
 		if (keys[KeyEvent.VK_RIGHT] || keys[KeyEvent.VK_D])
-			fPlayerAngle += fSpeed * 0.5 * dt;
+			fPlayerAngle += 2.0 * dt;
 		double nx = fPlayerX, ny = fPlayerY;
 		if (keys[KeyEvent.VK_UP] || keys[KeyEvent.VK_W]) {
 			nx += Math.cos(fPlayerAngle) * fSpeed * dt;
@@ -289,99 +232,106 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			fPlayerX = nx;
 		if (!isSolid(fPlayerX, ny))
 			fPlayerY = ny;
-		if (bShooting) {
-			nShootTimer--;
-			if (nShootTimer <= 0)
-				bShooting = false;
-		}
 	}
 
 	// ── RENDER ────────────────────────────────────────────────────
+	// Height scale per branch depth:
+	// 0 = trunk → 1.00 (full wall)
+	// 1 = main bough → 0.75
+	// 2 = secondary → 0.50
+	// 3 = twig → 0.30
+	// 4 = fine twig → 0.18
+	private static final double[] HEIGHT_SCALE = { 1.0, 0.75, 0.50, 0.30, 0.18, 0.12, 0.08, 0.08, 0.08, 0.08, 1.0 }; // index
+																														// 10=trunk
+
 	private void render() {
-		// Sky gradient (outdoor green-tinted)
+		// Sky — blue-grey
 		for (int y = 0; y < nScreenHeight / 2; y++) {
 			float t = (float) y / (nScreenHeight / 2f);
-			int r = (int) (15 + 25 * t), g = (int) (40 + 30 * t), b = (int) (15 + 20 * t);
+			int r = (int) (80 + 40 * t), g = (int) (120 + 50 * t), b = (int) (160 + 50 * t);
 			for (int x = 0; x < nScreenWidth; x++)
 				offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 		}
-		// Floor
+		// Floor — earthy
 		for (int y = nScreenHeight / 2; y < nScreenHeight; y++) {
 			float t = (float) (y - nScreenHeight / 2) / (nScreenHeight / 2f);
-			int r = (int) (40 + 20 * t), g = (int) (50 + 25 * t), b = (int) (20 + 10 * t);
+			int r = (int) (60 + 30 * t), g = (int) (45 + 20 * t), b = (int) (20 + 10 * t);
 			for (int x = 0; x < nScreenWidth; x++)
 				offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 		}
-
-		double[] depthBuf = new double[nScreenWidth];
 
 		for (int x = 0; x < nScreenWidth; x++) {
 			double rayA = (fPlayerAngle - fFOV / 2.0) + ((double) x / nScreenWidth) * fFOV;
 			double eyeX = Math.cos(rayA), eyeY = Math.sin(rayA);
 
-			// Collect up to 4 hits — leaves are semi-transparent like bushes
-			double[] hDist = new double[4];
-			int[] hType = new int[4];
+			// March ray — collect ALL hits up to depth 8 (branches are see-through)
+			double[] hDist = new double[8];
+			int[] hDepth = new int[8];
 			int hCount = 0;
 			double dist = 0;
 			int lastCell = 0;
+			int lastCellX = -1, lastCellY = -1;
 
-			while (dist < fDepth && hCount < 4) {
-				dist += 0.01;
+			while (dist < fDepth && hCount < 8) {
+				dist += 0.02;
 				int tx = (int) (fPlayerX + eyeX * dist), ty = (int) (fPlayerY + eyeY * dist);
-				if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) {
-					hDist[hCount] = fDepth;
-					hType[hCount] = 0;
+				if (tx == lastCellX && ty == lastCellY)
+					continue;
+				lastCellX = tx;
+				lastCellY = ty;
+				int cell = getCell(tx, ty);
+				if (cell < 0) { // boundary
+					hDist[hCount] = dist;
+					hDepth[hCount] = -1;
 					hCount++;
 					break;
 				}
-				int cell = getCell(tx, ty);
-				if (cell != 0 && cell != lastCell) {
+				if (cell == 10) { // TRUNK — opaque, stop
 					hDist[hCount] = dist;
-					hType[hCount] = cell;
+					hDepth[hCount] = 10;
+					hCount++;
+					break;
+				}
+				if (cell > 0 && cell != lastCell) { // branch cell (depth 1–4)
+					hDist[hCount] = dist;
+					hDepth[hCount] = cell;
 					hCount++;
 					lastCell = cell;
-					// Only trunk and brick are fully opaque — stop there
-					if (cell == 2 || cell == 0xFF)
-						break;
-					// Leaves and bushes: keep going to find what's behind
+					// keep marching — branches are semi-transparent
+				} else if (cell == 0 && lastCell > 0) {
+					lastCell = 0; // exited a branch region, reset so we can hit next
 				} else if (cell == 0) {
 					lastCell = 0;
 				}
+
 			}
 
-			depthBuf[x] = hCount > 0 ? hDist[0] : fDepth;
-
-			// Pre-compute screen bands for each hit
-			// Cell heights: trunk=full, leaves=top 55% (canopy), bush=bottom 40%
+			// Render each hit back-to-front
+			// Pre-compute screen bands
 			int[] cArr = new int[hCount], fArr = new int[hCount];
 			for (int hi = 0; hi < hCount; hi++) {
 				double d = hDist[hi];
+				int dep = hDepth[hi];
 				int c = (int) (nScreenHeight / 2.0 - nScreenHeight / d);
 				int f = nScreenHeight - c;
-				int type = hType[hi];
-				if (type == 3) { // leaves: upper 55% as canopy block above trunk top
+				if (dep > 0 && dep < HEIGHT_SCALE.length) {
+					double sc = HEIGHT_SCALE[dep];
 					int wallH = f - c;
-					// Canopy occupies top 55%, sitting above the trunk top (ceiling of full wall)
-					int canopyH = (int) (wallH * 0.55);
-					f = c + canopyH; // canopy bottom = ceiling + canopyH
-				} else if (type == 1) { // bush: bottom 40%
-					int wallH = f - c;
-					c = f - (int) (wallH * 0.4);
+					c = f - (int) (wallH * sc);
+				} else if (dep == -1) { // boundary
+					// full height
 				}
 				cArr[hi] = c;
 				fArr[hi] = f;
 			}
 
-			// Render back-to-front
 			for (int hi = hCount - 1; hi >= 0; hi--) {
 				double d = hDist[hi];
-				int type = hType[hi];
+				int dep = hDepth[hi];
+				if (dep == 0)
+					continue; // skip open air (shouldn't be in hits)
 				int ceiling = cArr[hi], floor = fArr[hi];
-
-				// Pick texture
-				int[] tex = (type == 2) ? texTrunk : (type == 3) ? texLeaves : (type == 1) ? texBush : texBrick;
-
+				int[] tex = (dep == 10) ? texBark : (dep == 1) ? texBough : texTwig;
 				double hitX = fPlayerX + eyeX * d, hitY = fPlayerY + eyeY * d;
 				int texX;
 				if (Math.abs(eyeX) > Math.abs(eyeY))
@@ -389,49 +339,24 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 				else
 					texX = (int) ((hitX - Math.floor(hitX)) * TEX_W) & (TEX_W - 1);
 
-				// Face shading: north/south faces darker than east/west (Minecraft style)
-				float faceDark = (Math.abs(eyeX) > Math.abs(eyeY)) ? 1.0f : 0.75f;
-				float distBright = (float) Math.max(0.07, 1.0 - d / fDepth);
-				float brightness = distBright * faceDark;
+				float face = (Math.abs(eyeX) > Math.abs(eyeY)) ? 1.0f : 0.75f;
+				float distB = (float) Math.max(0.08, 1.0 - d / fDepth);
+				float bright = distB * face;
 
-				for (int y = 0; y < nScreenHeight; y++) {
-					if (y <= ceiling || y > floor)
+				for (int y = ceiling; y <= floor && y < nScreenHeight; y++) {
+					if (y < 0)
 						continue;
-					// Skip if occluded by closer solid hit
 					boolean occ = false;
-					for (int fhi = 0; fhi < hi; fhi++) {
-						int ft = hType[fhi];
-						if (ft != 1 && ft != 3) {
-							if (y > cArr[fhi] && y <= fArr[fhi]) {
-								occ = true;
-								break;
-							}
-						} else {
-							if (y > cArr[fhi] && y <= fArr[fhi]) {
-								occ = true;
-								break;
-							}
+					for (int fhi = 0; fhi < hi; fhi++)
+						if (y >= cArr[fhi] && y <= fArr[fhi] && hDepth[fhi] > 0) {
+							occ = true;
+							break;
 						}
-					}
 					if (occ)
 						continue;
-
-					int texY = (int) (((y - ceiling) / (double) (floor - ceiling)) * TEX_H) & (TEX_H - 1);
+					int texY = (int) (((y - ceiling) / (double) (floor - ceiling + 1)) * TEX_H) & (TEX_H - 1);
 					int tc = tex[texY * TEX_W + texX];
-
-					// Transparency: leaves chroma-key (pure g=200,r=0,b=0) and bush sky
-					if (type == 3) {
-						int tr = (tc >> 16) & 0xFF, tg = (tc >> 8) & 0xFF, tb2 = tc & 0xFF;
-						if (tr == 0 && tg == 200 && tb2 == 0)
-							continue;
-					}
-					if (type == 1) {
-						int tr = (tc >> 16) & 0xFF, tg = (tc >> 8) & 0xFF, tb2 = tc & 0xFF;
-						if (tr < 60 && tg > 35 && tg < 80 && tb2 < 50)
-							continue;
-					}
-
-					float fb = Math.max(0.07f, brightness);
+					float fb = Math.max(0.08f, bright);
 					int r = Math.min(255, (int) (((tc >> 16) & 0xFF) * fb));
 					int g = Math.min(255, (int) (((tc >> 8) & 0xFF) * fb));
 					int b = Math.min(255, (int) ((tc & 0xFF) * fb));
@@ -440,99 +365,61 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			}
 		}
 
-		// Wall proximity darkness
-		double minD = fDepth;
-		for (int ri = -2; ri <= 2; ri++) {
-			double ra = fPlayerAngle + ri * 0.15;
-			double rx = Math.cos(ra), ry = Math.sin(ra);
-			double rd = 0;
-			while (rd < 1.5) {
-				rd += 0.01;
-				if (getCell((int) (fPlayerX + rx * rd), (int) (fPlayerY + ry * rd)) != 0) {
-					minD = Math.min(minD, rd);
-					break;
-				}
-			}
-		}
-		float pa = (float) Math.max(0, Math.min(1, 1.0 - minD / 0.5));
-		if (pa > 0.01f)
-			for (int py = 0; py < nScreenHeight; py++)
-				for (int px = 0; px < nScreenWidth; px++) {
-					int col = offscreen.getRGB(px, py);
-					offscreen.setRGB(px, py, (((int) (((col >> 16) & 0xFF) * (1 - pa))) << 16)
-							| (((int) (((col >> 8) & 0xFF) * (1 - pa))) << 8) | ((int) ((col & 0xFF) * (1 - pa))));
-				}
-
 		offG.drawImage(offscreen, 0, 0, null);
 		drawHUD(offG);
 	}
 
 	private void drawHUD(Graphics2D g) {
-		g.setColor(new Color(180, 180, 180, 200));
-		g.setFont(new Font("Courier New", Font.PLAIN, 11));
-		g.drawString(String.format("FPS: %.0f", fps), 10, 20);
+		// FPS
+		g.setColor(new Color(220, 220, 220, 220));
+		g.setFont(new Font("Courier New", Font.PLAIN, 12));
+		g.drawString(
+				String.format("FPS:%.0f  pos:(%.1f,%.1f)  tree cells:%d", fps, fPlayerX, fPlayerY, treeOverlay.size()),
+				10, 20);
+		// Crosshair
 		int cx = nScreenWidth / 2, cy = nScreenHeight / 2;
-		g.setColor(new Color(255, 255, 255, 180));
-		g.drawLine(cx - 12, cy, cx - 4, cy);
-		g.drawLine(cx + 4, cy, cx + 12, cy);
-		g.drawLine(cx, cy - 12, cx, cy - 4);
-		g.drawLine(cx, cy + 4, cx, cy + 12);
-		g.setColor(new Color(150, 150, 150, 180));
+		g.setColor(new Color(255, 255, 255, 200));
+		g.drawLine(cx - 10, cy, cx - 3, cy);
+		g.drawLine(cx + 3, cy, cx + 10, cy);
+		g.drawLine(cx, cy - 10, cx, cy - 3);
+		g.drawLine(cx, cy + 3, cx, cy + 10);
+		g.setColor(new Color(180, 180, 180, 180));
 		g.setFont(new Font("Courier New", Font.PLAIN, 11));
-		g.drawString("WASD/Arrows: Move | Q/E: Strafe | R: Restart", 10, nScreenHeight - 10);
+		g.drawString("WASD=move  Q/E=strafe  R=restart", 10, nScreenHeight - 10);
+		// Minimap
 		drawMiniMap(g);
-		if (bGameOver) {
-			g.setColor(new Color(180, 0, 0, 200));
-			g.fillRect(0, 0, nScreenWidth, nScreenHeight);
-			g.setColor(Color.RED);
-			g.setFont(new Font("Courier New", Font.BOLD, 80));
-			g.drawString("YOU DIED", nScreenWidth / 2 - 230, nScreenHeight / 2);
-			g.setColor(Color.WHITE);
-			g.setFont(new Font("Courier New", Font.PLAIN, 24));
-			g.drawString("Press R to restart", nScreenWidth / 2 - 120, nScreenHeight / 2 + 60);
-		}
 	}
 
 	private void drawMiniMap(Graphics2D g) {
-		int cellPx = 8, mapW = BIOME_COLS * cellPx, mapH = BIOME_ROWS * cellPx;
-		int offX = nScreenWidth - mapW - 10, offY = 10;
-		g.setColor(new Color(0, 0, 0, 160));
-		g.fillRect(offX - 2, offY - 2, mapW + 4, mapH + 4);
-		for (int by = 0; by < BIOME_ROWS; by++)
-			for (int bx = 0; bx < BIOME_COLS; bx++) {
-				int biome = biomeMap[by][bx];
-				g.setColor(biome == 1 ? new Color(180, 200, 80)
-						: biome == 2 ? new Color(60, 160, 60) : new Color(30, 100, 30));
-				g.fillRect(offX + bx * cellPx, offY + by * cellPx, cellPx - 1, cellPx - 1);
-			}
-		int px = offX + (int) (fPlayerX / TILE_SIZE * cellPx), py = offY + (int) (fPlayerY / TILE_SIZE * cellPx);
+		int scale = 8, mW = WORLD_W * scale, mH = WORLD_H * scale;
+		// Too big — show at 4px per cell, top-right
+		int ps = 4;
+		int ox = nScreenWidth - WORLD_W * ps - 10, oy = 10;
+		g.setColor(new Color(0, 0, 0, 150));
+		g.fillRect(ox, oy, WORLD_W * ps, WORLD_H * ps);
+		// Draw tree cells
+		for (Map.Entry<Long, Integer> e : treeOverlay.entrySet()) {
+			long k = e.getKey();
+			int dep = e.getValue();
+			int wx = (int) ((k % 10000) - 500), wy = (int) ((k / 10000) - 500);
+			if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H)
+				continue;
+			g.setColor(dep == 0 ? new Color(60, 30, 10)
+					: dep == 1 ? new Color(100, 55, 20) : dep == 2 ? new Color(140, 80, 35) : new Color(170, 110, 50));
+			g.fillRect(ox + wx * ps, oy + wy * ps, ps, ps);
+		}
+		// Player
+		int px = ox + (int) (fPlayerX * ps), py = oy + (int) (fPlayerY * ps);
 		g.setColor(Color.WHITE);
 		g.fillOval(px - 2, py - 2, 5, 5);
 		g.setColor(Color.YELLOW);
-		g.drawLine(px, py, (int) (px + Math.cos(fPlayerAngle) * 6), (int) (py + Math.sin(fPlayerAngle) * 6));
-		g.setFont(new Font("Courier New", Font.PLAIN, 9));
-		g.setColor(new Color(180, 200, 80));
-		g.fillRect(offX, offY + mapH + 4, 8, 8);
-		g.setColor(Color.WHITE);
-		g.drawString("Flat", offX + 10, offY + mapH + 12);
-		g.setColor(new Color(60, 160, 60));
-		g.fillRect(offX, offY + mapH + 14, 8, 8);
-		g.setColor(Color.WHITE);
-		g.drawString("Bush", offX + 10, offY + mapH + 22);
-		g.setColor(new Color(30, 100, 30));
-		g.fillRect(offX, offY + mapH + 24, 8, 8);
-		g.setColor(Color.WHITE);
-		g.drawString("Trees", offX + 10, offY + mapH + 32);
+		g.drawLine(px, py, (int) (px + Math.cos(fPlayerAngle) * 8), (int) (py + Math.sin(fPlayerAngle) * 8));
 	}
 
 	private void restart() {
 		fPlayerX = 5;
-		fPlayerY = 5;
+		fPlayerY = 15;
 		fPlayerAngle = 0;
-		nHealth = 100;
-		nAmmo = 30;
-		bGameOver = false;
-		bShooting = false;
 	}
 
 	@Override
@@ -562,14 +449,14 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	public static void main(String[] args) {
-		JFrame frame = new JFrame("DOOM-J | Voxel Biomes");
+		JFrame f = new JFrame("Fractal Tree Skeleton");
 		FPSJFrame game = new FPSJFrame();
-		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		frame.add(game);
-		frame.pack();
-		frame.setResizable(false);
-		frame.setLocationRelativeTo(null);
-		frame.setVisible(true);
+		f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		f.add(game);
+		f.pack();
+		f.setResizable(false);
+		f.setLocationRelativeTo(null);
+		f.setVisible(true);
 		game.requestFocusInWindow();
 	}
 }
