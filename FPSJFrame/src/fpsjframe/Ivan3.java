@@ -230,35 +230,136 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	private void generateTreeTex(java.util.Random rng) {
-		float[] n = makeNoise(rng, 2);
-		float[] n2 = makeNoise(rng, 1);
-		for (int ty = 0; ty < TEX_H; ty++)
-			for (int tx = 0; tx < TEX_W; tx++) {
-				float v = n[ty * TEX_W + tx];
-				float v2 = n2[ty * TEX_W + tx];
-				// Bark: vertical stripe pattern
-				boolean darkStripe = (tx % 12 < 4);
-				int r, g, b;
-				if (darkStripe) {
-					r = (int) (55 + v * 30);
-					g = (int) (35 + v * 20);
-					b = (int) (15 + v * 10);
-				} else {
-					r = (int) (100 + v * 50);
-					g = (int) (65 + v * 30);
-					b = (int) (25 + v * 20);
+		float[] noise = makeNoise(rng, 2);
+
+		// Sky background colour (matches the renderer's sky)
+		int SKY_R = 25, SKY_G = 55, SKY_B = 25;
+
+		// Paint everything as sky first
+		for (int i = 0; i < TEX_W * TEX_H; i++)
+			texTree[i] = (SKY_R << 16) | (SKY_G << 8) | SKY_B;
+
+		// Helper: draw a bark pixel with noise variation
+		java.util.function.BiConsumer<int[], Float> barkPx = (coord, v) -> {
+			int tx = coord[0], ty = coord[1];
+			if (tx < 0 || tx >= TEX_W || ty < 0 || ty >= TEX_H)
+				return;
+			int r = Math.min(255, (int) (90 + v * 50));
+			int g = Math.min(255, (int) (55 + v * 30));
+			int b = Math.min(255, (int) (20 + v * 15));
+			texTree[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
+		};
+
+		// Draw a thick branch/trunk as a filled rectangle with tapered width
+		// branchRect(x_centre, y_top, y_bottom, half_width)
+		java.util.function.Consumer<int[]> branchRect = (p) -> {
+			int cx = p[0], yt = p[1], yb = p[2], hw = p[3];
+			for (int ty = yt; ty <= yb; ty++) {
+				// Slight taper: wider at bottom, narrower at top
+				float t = (yb == yt) ? 1f : (float) (ty - yt) / (yb - yt);
+				int w = Math.max(1, (int) (hw * (0.5f + 0.5f * t)));
+				for (int tx = cx - w; tx <= cx + w; tx++) {
+					float v = noise[Math.max(0, Math.min(TEX_H - 1, ty)) * TEX_W
+							+ Math.max(0, Math.min(TEX_W - 1, tx))];
+					barkPx.accept(new int[] { tx, ty }, v);
 				}
-				// Horizontal ring lines every 10 pixels
-				if (ty % 10 < 2) {
-					r = (int) (r * 0.7);
-					g = (int) (g * 0.7);
-					b = (int) (b * 0.7);
-				}
-				// Noise variation
-				r = Math.min(255, (int) (r + v2 * 20 - 10));
-				g = Math.min(255, (int) (g + v2 * 15 - 7));
-				texTree[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
 			}
+		};
+
+		// ── TRUNK (centre, bottom 40% of texture) ──────────────────
+		int trunkCX = TEX_W / 2;
+		int trunkTop = (int) (TEX_H * 0.55);
+		int trunkBot = TEX_H - 1;
+		branchRect.accept(new int[] { trunkCX, trunkTop, trunkBot, 5 });
+
+		// ── MAIN FORK at ~55% height ─────────────────────────────
+		int forkY = (int) (TEX_H * 0.55);
+
+		// Left main branch
+		for (int step = 0; step < 18; step++) {
+			int bx = trunkCX - step * 2;
+			int by = forkY - step * 2;
+			float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+			int hw = Math.max(1, 4 - step / 6);
+			for (int dy = -hw; dy <= hw; dy++)
+				for (int dx = -hw; dx <= hw; dx++)
+					barkPx.accept(new int[] { bx + dx, by + dy }, v);
+		}
+		// Right main branch
+		for (int step = 0; step < 18; step++) {
+			int bx = trunkCX + step * 2;
+			int by = forkY - step * 2;
+			float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+			int hw = Math.max(1, 4 - step / 6);
+			for (int dy = -hw; dy <= hw; dy++)
+				for (int dx = -hw; dx <= hw; dx++)
+					barkPx.accept(new int[] { bx + dx, by + dy }, v);
+		}
+
+		// ── SECONDARY BRANCHES ────────────────────────────────────
+		// Left sub-branch curving more left + up
+		int lBranchStartX = trunkCX - 12, lBranchStartY = forkY - 12;
+		for (int step = 0; step < 12; step++) {
+			int bx = lBranchStartX - step * 2;
+			int by = lBranchStartY - step;
+			float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+			int hw = Math.max(1, 3 - step / 5);
+			for (int dy = -hw; dy <= hw; dy++)
+				for (int dx = -hw; dx <= hw; dx++)
+					barkPx.accept(new int[] { bx + dx, by + dy }, v);
+		}
+		// Left sub-branch going more steeply up
+		for (int step = 0; step < 10; step++) {
+			int bx = lBranchStartX - step;
+			int by = lBranchStartY - step * 2;
+			float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+			int hw = Math.max(1, 2 - step / 6);
+			for (int dy = -hw; dy <= hw; dy++)
+				for (int dx = -hw; dx <= hw; dx++)
+					barkPx.accept(new int[] { bx + dx, by + dy }, v);
+		}
+		// Right sub-branch curving more right + up
+		int rBranchStartX = trunkCX + 12, rBranchStartY = forkY - 12;
+		for (int step = 0; step < 12; step++) {
+			int bx = rBranchStartX + step * 2;
+			int by = rBranchStartY - step;
+			float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+			int hw = Math.max(1, 3 - step / 5);
+			for (int dy = -hw; dy <= hw; dy++)
+				for (int dx = -hw; dx <= hw; dx++)
+					barkPx.accept(new int[] { bx + dx, by + dy }, v);
+		}
+		// Right sub-branch going more steeply up
+		for (int step = 0; step < 10; step++) {
+			int bx = rBranchStartX + step;
+			int by = rBranchStartY - step * 2;
+			float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+			int hw = Math.max(1, 2 - step / 6);
+			for (int dy = -hw; dy <= hw; dy++)
+				for (int dx = -hw; dx <= hw; dx++)
+					barkPx.accept(new int[] { bx + dx, by + dy }, v);
+		}
+
+		// ── TERTIARY TWIGS (thin, near top) ───────────────────────
+		int[][] twigRoots = {
+				{ trunkCX - 24, forkY - 22 },
+				{ trunkCX - 10, forkY - 32 },
+				{ trunkCX + 10, forkY - 32 },
+				{ trunkCX + 24, forkY - 22 },
+				{ trunkCX - 18, forkY - 16 },
+				{ trunkCX + 18, forkY - 16 },
+		};
+		int[][] twigDirs = { { -2, -1 }, { -1, -2 }, { 1, -2 }, { 2, -1 }, { -2, -2 }, { 2, -2 } };
+		for (int ti = 0; ti < twigRoots.length; ti++) {
+			int wx = twigRoots[ti][0], wy = twigRoots[ti][1];
+			int dx = twigDirs[ti][0], dy = twigDirs[ti][1];
+			for (int step = 0; step < 8; step++) {
+				int bx = wx + dx * step, by = wy + dy * step;
+				float v = noise[Math.max(0, Math.min(TEX_H - 1, by)) * TEX_W + Math.max(0, Math.min(TEX_W - 1, bx))];
+				barkPx.accept(new int[] { bx, by }, v);
+				barkPx.accept(new int[] { bx + 1, by }, v);
+			}
+		}
 	}
 
 	// ── GAME LOOP ─────────────────────────────────────────────────
@@ -434,6 +535,13 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 					int texY = (int) (((y - nCeiling) / (double) (nFloor - nCeiling)) * TEX_H) & (TEX_H - 1);
 					int tc = tex[texY * TEX_W + texX];
+					// Tree uses sky colour as transparent — skip those pixels so branches are
+					// see-through
+					if (hType == 2) {
+						int tr = (tc >> 16) & 0xFF, tg = (tc >> 8) & 0xFF, tb2 = tc & 0xFF;
+						if (tr < 60 && tg > 35 && tg < 80 && tb2 < 50)
+							continue;
+					}
 					double wallMid = (nCeiling + nFloor) / 2.0, wallHalfH = (nFloor - nCeiling) / 2.0 + 1;
 					float vf = (float) (1.0 - 0.25 * Math.pow(Math.abs(y - wallMid) / wallHalfH, 2));
 					float fb = Math.max(0.05f, brightness * vf);
