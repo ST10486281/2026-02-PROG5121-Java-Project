@@ -232,37 +232,27 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 				bShooting = false;
 		}
 
-		// Enemy AI - simple tracking
-		for (int e = 0; e < nEnemyCount; e++) {
-			if (!enemyAlive[e])
-				continue;
-
-			double dx = fPlayerX - enemyX[e];
-			double dy = fPlayerY - enemyY[e];
-			double dist = Math.sqrt(dx * dx + dy * dy);
-
-			if (dist < 8.0) {
-				double moveSpeed = 1.2 * fElapsedTime;
-				double newEX = enemyX[e] + (dx / dist) * moveSpeed;
-				double newEY = enemyY[e] + (dy / dist) * moveSpeed;
-
-				if (newEX >= 0 && newEX < nMapWidth && newEY >= 0 && newEY < nMapHeight) {
-					if (map[(int) newEY].charAt((int) newEX) != '#') {
-						enemyX[e] = newEX;
-						enemyY[e] = newEY;
-					}
-				}
-
-				// Enemy attacks player
-				if (dist < 0.8) {
-					nHealth -= (int) (20 * fElapsedTime);
-					if (nHealth <= 0) {
-						nHealth = 0;
-						bGameOver = true;
-					}
-				}
-			}
-		}
+		/*
+		 * -- Enemy AI commented out --
+		 * for (int e = 0; e < nEnemyCount; e++) {
+		 * if (!enemyAlive[e]) continue;
+		 * double dx = fPlayerX - enemyX[e];
+		 * double dy = fPlayerY - enemyY[e];
+		 * double dist = Math.sqrt(dx * dx + dy * dy);
+		 * if (dist < 8.0) {
+		 * double moveSpeed = 1.2 * fElapsedTime;
+		 * double newEX = enemyX[e] + (dx / dist) * moveSpeed;
+		 * double newEY = enemyY[e] + (dy / dist) * moveSpeed;
+		 * if (newEX >= 0 && newEX < nMapWidth && newEY >= 0 && newEY < nMapHeight) {
+		 * if (map[(int) newEY].charAt((int) newEX) != '#') {
+		 * enemyX[e] = newEX; enemyY[e] = newEY;
+		 * }
+		 * }
+		 * if (dist < 0.8) { nHealth -= (int)(20 * fElapsedTime); if (nHealth <= 0) {
+		 * nHealth = 0; bGameOver = true; } }
+		 * }
+		 * }
+		 */
 	}
 
 	private void render() {
@@ -392,55 +382,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 				}
 			}
 		}
-		// Draw enemies as sprites
-		for (int e = 0; e < nEnemyCount; e++) {
-			if (!enemyAlive[e])
-				continue;
-
-			double dx = enemyX[e] - fPlayerX;
-			double dy = enemyY[e] - fPlayerY;
-			double fDistToEnemy = Math.sqrt(dx * dx + dy * dy);
-
-			double fEnemyAngle = Math.atan2(dy, dx) - fPlayerAngle;
-			// Normalize angle
-			while (fEnemyAngle < -Math.PI)
-				fEnemyAngle += 2 * Math.PI;
-			while (fEnemyAngle > Math.PI)
-				fEnemyAngle -= 2 * Math.PI;
-
-			boolean bInFOV = Math.abs(fEnemyAngle) < fFOV / 2.0 + 0.05;
-
-			if (bInFOV && fDistToEnemy >= 0.5 && fDistToEnemy < fDepth) {
-				double fEnemyHeight = Math.min(nScreenHeight / fDistToEnemy, nScreenHeight);
-				double fEnemyCeiling = nScreenHeight / 2.0 - fEnemyHeight / 2.0;
-				double fEnemyFloor = nScreenHeight / 2.0 + fEnemyHeight / 2.0;
-
-				double fEnemyAspect = fEnemyHeight / 2.0;
-				double fEnemyMiddle = (0.5 * (fEnemyAngle / (fFOV / 2.0)) + 0.5) * nScreenWidth;
-
-				// Draw enemy sprite (simple monster silhouette)
-				for (int ex = (int) (fEnemyMiddle - fEnemyAspect); ex < (int) (fEnemyMiddle + fEnemyAspect); ex++) {
-					if (ex < 0 || ex >= nScreenWidth)
-						continue;
-					if (fDistToEnemy >= fDepthBuffer[ex])
-						continue;
-
-					for (int ey = (int) fEnemyCeiling; ey < (int) fEnemyFloor; ey++) {
-						if (ey < 0 || ey >= nScreenHeight)
-							continue;
-
-						double tx = (ex - (fEnemyMiddle - fEnemyAspect)) / (fEnemyAspect * 2);
-						double ty = (ey - fEnemyCeiling) / (fEnemyFloor - fEnemyCeiling);
-
-						// Simple monster shape
-						Color c = getEnemyPixel(tx, ty, fDistToEnemy);
-						if (c != null) {
-							offscreen.setRGB(ex, ey, c.getRGB());
-						}
-					}
-				}
-			}
-		}
+		/* -- Draw enemies as sprites commented out */
 
 		// Wall proximity darkness overlay
 		// Cast 5 rays in a small fan to find the closest wall in front
@@ -637,14 +579,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			}
 		}
 
-		// Draw enemies on minimap
-		for (int e = 0; e < nEnemyCount; e++) {
-			if (!enemyAlive[e])
-				continue;
-			g.setColor(Color.RED);
-			g.fillOval(mapOffX + (int) (enemyX[e] * mapScale) - 2,
-					mapOffY + (int) (enemyY[e] * mapScale) - 2, 5, 5);
-		}
+		/* -- Draw enemies on minimap commented out */
 
 		// Draw player
 		g.setColor(Color.GREEN);
@@ -670,19 +605,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		double fEyeX = Math.cos(fPlayerAngle);
 		double fEyeY = Math.sin(fPlayerAngle);
 
-		for (int e = 0; e < nEnemyCount; e++) {
-			if (!enemyAlive[e])
-				continue;
-
-			double dx = enemyX[e] - fPlayerX;
-			double dy = enemyY[e] - fPlayerY;
-			double dist = Math.sqrt(dx * dx + dy * dy);
-			double dot = (fEyeX * dx / dist) + (fEyeY * dy / dist);
-
-			if (dot > 0.97 && dist < fDepth) {
-				enemyAlive[e] = false;
-			}
-		}
+		// -- Shoot enemy detection commented out --
+		// for (int e = 0; e < nEnemyCount; e++) { ... }
 	}
 
 	private void restart() {
@@ -693,10 +617,9 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		nAmmo = 30;
 		bGameOver = false;
 		bShooting = false;
-		for (int i = 0; i < nEnemyCount; i++)
-			enemyAlive[i] = true;
-		enemyX = new double[] { 5.5, 10.5, 12.5 };
-		enemyY = new double[] { 5.5, 9.5, 3.5 };
+		// for (int i = 0; i < nEnemyCount; i++) enemyAlive[i] = true;
+		// enemyX = new double[]{5.5, 10.5, 12.5};
+		// enemyY = new double[]{5.5, 9.5, 3.5};
 	}
 
 	@Override
