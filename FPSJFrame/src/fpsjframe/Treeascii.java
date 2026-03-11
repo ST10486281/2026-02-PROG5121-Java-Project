@@ -2,16 +2,17 @@ import java.util.*;
 
 public class TreeAscii {
 
-	static final int W = 20, H = 10;
-	static int[][] grid = new int[H][W];
+	public final int W, H;
+	public final int[][] grid;
 
-	public static void main(String[] args) {
-		long seed = args.length > 0 ? Long.parseLong(args[0]) : 42;
-		growBranch(W / 2, H - 1, -Math.PI / 2, 4, 0, 5, new Random(seed));
-		print();
+	public TreeAscii(int w, int h, long seed) {
+		this.W = w;
+		this.H = h;
+		this.grid = new int[h][w];
+		growBranch(w / 2.0, h - 1, -Math.PI / 2, h * 0.4, 0, 5, new Random(seed));
 	}
 
-	static void growBranch(double ox, double oy, double angle, double length,
+	private void growBranch(double ox, double oy, double angle, double length,
 			int depth, int maxDepth, Random rng) {
 		if (depth > maxDepth || length < 1.0)
 			return;
@@ -38,12 +39,32 @@ public class TreeAscii {
 			growBranch(ex, ey, angle + wobble * 0.3, childLen * 0.75, depth + 1, maxDepth, new Random(rng.nextLong()));
 	}
 
-	static void print() {
+	/** Returns 1 if tree, 0 if air */
+	public int get(int x, int y) {
+		if (x < 0 || x >= W || y < 0 || y >= H)
+			return 0;
+		return grid[y][x];
+	}
+
+	/** True if this cell is part of the tree */
+	public boolean isTree(int x, int y) {
+		return get(x, y) == 1;
+	}
+
+	/** Print to console as 0/1 grid — optional utility */
+	public void print() {
 		for (int y = 0; y < H; y++) {
 			StringBuilder sb = new StringBuilder();
 			for (int x = 0; x < W; x++)
 				sb.append(grid[y][x]);
 			System.out.println(sb);
 		}
+	}
+
+	/** Quick test */
+	public static void main(String[] args) {
+		long seed = args.length > 0 ? Long.parseLong(args[0]) : 42;
+		TreeAscii tree = new TreeAscii(20, 10, seed);
+		tree.print();
 	}
 }
