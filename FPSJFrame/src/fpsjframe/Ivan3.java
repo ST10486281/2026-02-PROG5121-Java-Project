@@ -12,51 +12,102 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	private final int nScreenHeight = 600;
 
 	// Player state
-	private double fPlayerX = 1.5;
-	private double fPlayerY = 7.5;
+	private double fPlayerX = 5.0;
+	private double fPlayerY = 5.0;
 	private double fPlayerAngle = 0.0;
-	private double fFOV = Math.PI / 3.0; // 60 degrees
-	private double fDepth = 16.0;
+	private double fFOV = Math.PI / 3.0;
+	private double fDepth = 24.0;
 	private double fSpeed = 5.0;
 
 	// Key states
 	private boolean[] keys = new boolean[256];
 
-	// Map
-	private final int nMapWidth = 24;
-	private final int nMapHeight = 24;
-	private String[] map = {
-			"########################",
-			"#....##....#.....##....#",
-			"#.#####....#.....#####.#",
-			"#.#...#....#.....#...#.#",
-			"#.#........#.........#.#",
-			"#.#...#....#.....#...#.#",
-			"#.#####....#.....#####.#",
-			"#......................#",
-			"#.......########.......#",
-			"#.......#......#.......#",
-			"#.......#.#..#.#.......#",
-			"#######.#......#.......#",
-			"#.......#......#.#######",
-			"#.......#.#..#.#.......#",
-			"#.......#......#.......#",
-			"#.......########.......#",
-			"#......................#",
-			"#.######....#...######.#",
-			"#.#....#....#...#....#.#",
-			"#.#.........#........#.#",
-			"#.#....#....#...#....#.#",
-			"#.######....#...######.#",
-			"#....##.....#....##....#",
-			"########################"
+	// ── BIOME SYSTEM ──────────────────────────────────────────────
+	// Layer 1: 6x6 biome map. Each cell = 10x10 world units.
+	// 1 = Flatland, 2 = Bushland, 3 = Treeland
+	private static final int BIOME_COLS = 6;
+	private static final int BIOME_ROWS = 6;
+	private static final int TILE_SIZE = 10; // world units per biome cell
+	private static final int WORLD_W = BIOME_COLS * TILE_SIZE; // 60
+	private static final int WORLD_H = BIOME_ROWS * TILE_SIZE; // 60
+
+	private int[][] biomeMap = {
+			{ 1, 1, 2, 2, 3, 3 },
+			{ 1, 1, 2, 2, 3, 3 },
+			{ 1, 2, 2, 3, 3, 2 },
+			{ 2, 2, 3, 3, 2, 1 },
+			{ 3, 3, 2, 2, 1, 1 },
+			{ 3, 3, 2, 1, 1, 1 },
 	};
 
-	// Enemy state
-	private double[] enemyX = { 11.5, 5.5, 18.5, 11.5, 3.5, 19.5, 11.5 };
-	private double[] enemyY = { 11.5, 19.5, 4.5, 19.5, 4.5, 19.5, 4.5 };
-	private boolean[] enemyAlive = { true, true, true, true, true, true, true };
-	private int nEnemyCount = 7;
+	// Layer 2: detail tile maps for each biome type (10x10)
+	// 0 = walkable dirt/ground, 1 = bush (solid), 2 = tree (solid, trees only)
+	// BIOME 1: Flatland — all open
+	private int[][] biomeTiles1 = {
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	};
+
+	// BIOME 2: Bushland — 0=dirt, 1=bush
+	private int[][] biomeTiles2 = {
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 1, 0, 0, 1, 0, 0, 1, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 1, 0, 0, 0, 1, 0, 0, 0 },
+			{ 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 },
+			{ 0, 1, 0, 0, 0, 0, 0, 1, 0, 0 },
+			{ 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 1, 0, 0, 1, 0 },
+			{ 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 },
+			{ 0, 0, 0, 0, 0, 0, 0, 1, 0, 0 },
+	};
+
+	// BIOME 3: Treeland — 0=dirt, 1=bush, 2=tree
+	private int[][] biomeTiles3 = {
+			{ 0, 0, 2, 0, 0, 2, 0, 0, 2, 0 },
+			{ 0, 0, 0, 0, 1, 0, 0, 0, 0, 0 },
+			{ 2, 0, 0, 1, 0, 0, 0, 2, 0, 0 },
+			{ 0, 0, 1, 0, 0, 1, 0, 0, 0, 2 },
+			{ 0, 2, 0, 0, 0, 0, 2, 0, 1, 0 },
+			{ 0, 0, 0, 1, 0, 0, 0, 0, 0, 0 },
+			{ 2, 0, 0, 0, 0, 2, 0, 0, 1, 0 },
+			{ 0, 1, 0, 0, 2, 0, 0, 0, 0, 2 },
+			{ 0, 0, 0, 0, 0, 0, 1, 0, 0, 0 },
+			{ 0, 2, 0, 1, 0, 0, 0, 2, 0, 0 },
+	};
+
+	// ── MAP LOOKUP ───────────────────────────────────────────────
+	// Returns: 0 = open, 1 = bush, 2 = tree
+	private int getCell(int wx, int wy) {
+		if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H)
+			return 2; // out of bounds = solid
+		int bx = wx / TILE_SIZE;
+		int by = wy / TILE_SIZE;
+		int tx = wx % TILE_SIZE;
+		int ty = wy % TILE_SIZE;
+		int biome = biomeMap[by][bx];
+		int[][] tiles = (biome == 1) ? biomeTiles1 : (biome == 2) ? biomeTiles2 : biomeTiles3;
+		return tiles[ty][tx];
+	}
+
+	// Returns true if this world cell blocks movement
+	private boolean isSolid(double wx, double wy) {
+		return getCell((int) wx, (int) wy) != 0;
+	}
+
+	// ── ENEMY STATE (commented out) ───────────────────────────────
+	private double[] enemyX = { 11.5, 5.5, 18.5 };
+	private double[] enemyY = { 11.5, 19.5, 4.5 };
+	private boolean[] enemyAlive = { true, true, true };
+	private int nEnemyCount = 3;
 
 	// Game state
 	private int nHealth = 100;
@@ -72,14 +123,16 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	private long lastTime = System.nanoTime();
 	private double fps = 0;
 
-	// Colors
-	private Color[] wallShades = new Color[10];
-	private Color[] floorShades = new Color[10];
-
-	// Wall texture (generated procedurally)
+	// ── TEXTURES ─────────────────────────────────────────────────
 	private static final int TEX_W = 64;
 	private static final int TEX_H = 64;
-	private int[] wallTex = new int[TEX_W * TEX_H];
+	private int[] texBrick = new int[TEX_W * TEX_H]; // wall/boundary
+	private int[] texBush = new int[TEX_W * TEX_H]; // bush (green)
+	private int[] texTree = new int[TEX_W * TEX_H]; // tree (brown bark)
+
+	// Colors (still used for legacy shading arrays)
+	private Color[] wallShades = new Color[10];
+	private Color[] floorShades = new Color[10];
 
 	public FPSJFrame() {
 		setPreferredSize(new Dimension(nScreenWidth, nScreenHeight));
@@ -90,73 +143,125 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		offscreen = new BufferedImage(nScreenWidth, nScreenHeight, BufferedImage.TYPE_INT_RGB);
 		offG = offscreen.createGraphics();
 
-		// Precompute wall shades (red-brown doom style)
 		for (int i = 0; i < 10; i++) {
-			float brightness = (i + 1) / 10.0f;
-			wallShades[i] = new Color((int) (180 * brightness), (int) (80 * brightness), (int) (40 * brightness));
-		}
-		// Floor shades
-		for (int i = 0; i < 10; i++) {
-			float brightness = (i + 1) / 10.0f;
-			floorShades[i] = new Color((int) (60 * brightness), (int) (60 * brightness), (int) (60 * brightness));
+			float b = (i + 1) / 10.0f;
+			wallShades[i] = new Color((int) (180 * b), (int) (80 * b), (int) (40 * b));
+			floorShades[i] = new Color((int) (60 * b), (int) (60 * b), (int) (60 * b));
 		}
 
-		// Generate procedural stone wall texture using layered noise
 		java.util.Random rng = new java.util.Random(42);
-		// Base noise layer
-		float[] noise = new float[TEX_W * TEX_H];
-		for (int i = 0; i < noise.length; i++)
-			noise[i] = rng.nextFloat();
-		// Smooth with box blur passes to get natural variation
-		for (int pass = 0; pass < 3; pass++) {
-			float[] tmp = new float[TEX_W * TEX_H];
-			for (int ty = 0; ty < TEX_H; ty++) {
+		generateBrickTex(rng);
+		generateBushTex(rng);
+		generateTreeTex(rng);
+
+		new Thread(this).start();
+	}
+
+	// ── TEXTURE GENERATORS ────────────────────────────────────────
+
+	private float[] makeNoise(java.util.Random rng, int passes) {
+		float[] n = new float[TEX_W * TEX_H];
+		for (int i = 0; i < n.length; i++)
+			n[i] = rng.nextFloat();
+		for (int p = 0; p < passes; p++) {
+			float[] t = new float[TEX_W * TEX_H];
+			for (int ty = 0; ty < TEX_H; ty++)
 				for (int tx = 0; tx < TEX_W; tx++) {
-					float sum = 0;
-					int cnt = 0;
-					for (int dy = -2; dy <= 2; dy++) {
+					float s = 0;
+					int c = 0;
+					for (int dy = -2; dy <= 2; dy++)
 						for (int dx = -2; dx <= 2; dx++) {
-							int nx = (tx + dx + TEX_W) % TEX_W, ny = (ty + dy + TEX_H) % TEX_H;
-							sum += noise[ny * TEX_W + nx];
-							cnt++;
+							s += n[((ty + dy + TEX_H) % TEX_H) * TEX_W + ((tx + dx + TEX_W) % TEX_W)];
+							c++;
 						}
-					}
-					tmp[ty * TEX_W + tx] = sum / cnt;
+					t[ty * TEX_W + tx] = s / c;
 				}
-			}
-			noise = tmp;
+			n = t;
 		}
-		// Add mortar lines (horizontal and vertical brick pattern)
-		for (int ty = 0; ty < TEX_H; ty++) {
+		return n;
+	}
+
+	private void generateBrickTex(java.util.Random rng) {
+		float[] n = makeNoise(rng, 3);
+		for (int ty = 0; ty < TEX_H; ty++)
 			for (int tx = 0; tx < TEX_W; tx++) {
-				float n = noise[ty * TEX_W + tx];
-				// Brick rows every 8 pixels, offset every other row
-				int row = ty / 8;
-				int offset = (row % 2 == 0) ? 0 : TEX_W / 2;
-				int brickX = (tx + offset) % TEX_W;
-				boolean mortarH = (ty % 8 == 0) || (ty % 8 == 7);
-				boolean mortarV = (brickX % 16 == 0) || (brickX % 16 == 15);
-				boolean mortar = mortarH || mortarV;
+				float v = n[ty * TEX_W + tx];
+				int row = ty / 8, off = (row % 2 == 0) ? 0 : TEX_W / 2;
+				int bx = (tx + off) % TEX_W;
+				boolean mortar = (ty % 8 == 0) || (ty % 8 == 7) || (bx % 16 == 0) || (bx % 16 == 15);
 				int r, g, b;
 				if (mortar) {
-					// grey mortar
-					int v = (int) (60 + n * 30);
-					r = v;
-					g = v;
-					b = v;
+					int q = (int) (60 + v * 30);
+					r = q;
+					g = q;
+					b = q;
 				} else {
-					// reddish-brown brick with noise variation
-					r = (int) (120 + n * 60);
-					g = (int) (55 + n * 30);
-					b = (int) (30 + n * 20);
+					r = (int) (120 + v * 60);
+					g = (int) (55 + v * 30);
+					b = (int) (30 + v * 20);
 				}
-				wallTex[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
+				texBrick[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
 			}
-		}
-
-		Thread thread = new Thread(this);
-		thread.start();
 	}
+
+	private void generateBushTex(java.util.Random rng) {
+		float[] n = makeNoise(rng, 2);
+		for (int ty = 0; ty < TEX_H; ty++)
+			for (int tx = 0; tx < TEX_W; tx++) {
+				float v = n[ty * TEX_W + tx];
+				// Leafy green with darker patches
+				int r = (int) (30 + v * 40);
+				int g = (int) (100 + v * 80);
+				int b = (int) (20 + v * 30);
+				// Add occasional darker leaf clusters
+				if (v < 0.35f) {
+					r = (int) (r * 0.6);
+					g = (int) (g * 0.6);
+					b = (int) (b * 0.6);
+				}
+				// Thin stem lines
+				if (tx % 16 == 7 || tx % 16 == 8) {
+					r = (int) (60 + v * 20);
+					g = (int) (40 + v * 20);
+					b = 10;
+				}
+				texBush[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
+			}
+	}
+
+	private void generateTreeTex(java.util.Random rng) {
+		float[] n = makeNoise(rng, 2);
+		float[] n2 = makeNoise(rng, 1);
+		for (int ty = 0; ty < TEX_H; ty++)
+			for (int tx = 0; tx < TEX_W; tx++) {
+				float v = n[ty * TEX_W + tx];
+				float v2 = n2[ty * TEX_W + tx];
+				// Bark: vertical stripe pattern
+				boolean darkStripe = (tx % 12 < 4);
+				int r, g, b;
+				if (darkStripe) {
+					r = (int) (55 + v * 30);
+					g = (int) (35 + v * 20);
+					b = (int) (15 + v * 10);
+				} else {
+					r = (int) (100 + v * 50);
+					g = (int) (65 + v * 30);
+					b = (int) (25 + v * 20);
+				}
+				// Horizontal ring lines every 10 pixels
+				if (ty % 10 < 2) {
+					r = (int) (r * 0.7);
+					g = (int) (g * 0.7);
+					b = (int) (b * 0.7);
+				}
+				// Noise variation
+				r = Math.min(255, (int) (r + v2 * 20 - 10));
+				g = Math.min(255, (int) (g + v2 * 15 - 7));
+				texTree[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
+			}
+	}
+
+	// ── GAME LOOP ─────────────────────────────────────────────────
 
 	@Override
 	public void run() {
@@ -164,16 +269,11 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			long now = System.nanoTime();
 			double fElapsedTime = (now - lastTime) / 1_000_000_000.0;
 			lastTime = now;
-
-			if (!bGameOver) {
+			if (!bGameOver)
 				update(fElapsedTime);
-			}
-
 			render();
 			repaint();
-
 			fps = 1.0 / fElapsedTime;
-
 			try {
 				Thread.sleep(8);
 			} catch (InterruptedException e) {
@@ -183,209 +283,124 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	private void update(double fElapsedTime) {
-		// Rotate left
-		if (keys[KeyEvent.VK_LEFT] || keys[KeyEvent.VK_A]) {
+		if (keys[KeyEvent.VK_LEFT] || keys[KeyEvent.VK_A])
 			fPlayerAngle -= fSpeed * 0.5 * fElapsedTime;
-		}
-		// Rotate right
-		if (keys[KeyEvent.VK_RIGHT] || keys[KeyEvent.VK_D]) {
+		if (keys[KeyEvent.VK_RIGHT] || keys[KeyEvent.VK_D])
 			fPlayerAngle += fSpeed * 0.5 * fElapsedTime;
-		}
 
-		double newX = fPlayerX;
-		double newY = fPlayerY;
-
-		// Move forward
+		double newX = fPlayerX, newY = fPlayerY;
 		if (keys[KeyEvent.VK_UP] || keys[KeyEvent.VK_W]) {
 			newX += Math.cos(fPlayerAngle) * fSpeed * fElapsedTime;
 			newY += Math.sin(fPlayerAngle) * fSpeed * fElapsedTime;
 		}
-		// Move backward
 		if (keys[KeyEvent.VK_DOWN] || keys[KeyEvent.VK_S]) {
 			newX -= Math.cos(fPlayerAngle) * fSpeed * fElapsedTime;
 			newY -= Math.sin(fPlayerAngle) * fSpeed * fElapsedTime;
 		}
-
-		// Strafe left
 		if (keys[KeyEvent.VK_Q]) {
 			newX += Math.sin(fPlayerAngle) * fSpeed * fElapsedTime;
 			newY -= Math.cos(fPlayerAngle) * fSpeed * fElapsedTime;
 		}
-		// Strafe right
 		if (keys[KeyEvent.VK_E]) {
 			newX -= Math.sin(fPlayerAngle) * fSpeed * fElapsedTime;
 			newY += Math.cos(fPlayerAngle) * fSpeed * fElapsedTime;
 		}
 
-		// Collision detection
-		if (newX >= 0 && newX < nMapWidth && newY >= 0 && newY < nMapHeight) {
-			if (map[(int) newY].charAt((int) newX) != '#') {
-				fPlayerX = newX;
-				fPlayerY = newY;
-			}
-		}
+		if (!isSolid(newX, fPlayerY))
+			fPlayerX = newX;
+		if (!isSolid(fPlayerX, newY))
+			fPlayerY = newY;
 
-		// Shooting timer
 		if (bShooting) {
 			nShootTimer--;
 			if (nShootTimer <= 0)
 				bShooting = false;
 		}
-
-		/*
-		 * -- Enemy AI commented out --
-		 * for (int e = 0; e < nEnemyCount; e++) {
-		 * if (!enemyAlive[e]) continue;
-		 * double dx = fPlayerX - enemyX[e];
-		 * double dy = fPlayerY - enemyY[e];
-		 * double dist = Math.sqrt(dx * dx + dy * dy);
-		 * if (dist < 8.0) {
-		 * double moveSpeed = 1.2 * fElapsedTime;
-		 * double newEX = enemyX[e] + (dx / dist) * moveSpeed;
-		 * double newEY = enemyY[e] + (dy / dist) * moveSpeed;
-		 * if (newEX >= 0 && newEX < nMapWidth && newEY >= 0 && newEY < nMapHeight) {
-		 * if (map[(int) newEY].charAt((int) newEX) != '#') {
-		 * enemyX[e] = newEX; enemyY[e] = newEY;
-		 * }
-		 * }
-		 * if (dist < 0.8) { nHealth -= (int)(20 * fElapsedTime); if (nHealth <= 0) {
-		 * nHealth = 0; bGameOver = true; } }
-		 * }
-		 * }
-		 */
 	}
 
+	// ── RENDER ────────────────────────────────────────────────────
+
 	private void render() {
-		// Sky (dark gradient)
+		// Sky
 		for (int y = 0; y < nScreenHeight / 2; y++) {
 			float t = (float) y / (nScreenHeight / 2.0f);
-			int r = (int) (20 + 20 * t);
-			int g = (int) (10 + 10 * t);
-			int b = (int) (30 + 20 * t);
-			for (int x = 0; x < nScreenWidth; x++) {
-				offscreen.setRGB(x, y, new Color(r, g, b).getRGB());
-			}
+			int r = (int) (15 + 25 * t), g = (int) (40 + 30 * t), b = (int) (15 + 20 * t); // greenish outdoor sky
+			for (int x = 0; x < nScreenWidth; x++)
+				offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 		}
-
-		// Floor (dark grey gradient)
+		// Floor — earthy brown/green
 		for (int y = nScreenHeight / 2; y < nScreenHeight; y++) {
 			float t = (float) (y - nScreenHeight / 2) / (nScreenHeight / 2.0f);
-			int shade = (int) (30 + 40 * t);
-			for (int x = 0; x < nScreenWidth; x++) {
-				offscreen.setRGB(x, y, new Color(shade, shade, shade).getRGB());
-			}
+			int r = (int) (40 + 20 * t), g = (int) (50 + 25 * t), b = (int) (20 + 10 * t);
+			for (int x = 0; x < nScreenWidth; x++)
+				offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 		}
 
-		// Depth buffer for sprites
 		double[] fDepthBuffer = new double[nScreenWidth];
 
 		// Raycasting
 		for (int x = 0; x < nScreenWidth; x++) {
 			double fRayAngle = (fPlayerAngle - fFOV / 2.0) + ((double) x / nScreenWidth) * fFOV;
+			double fEyeX = Math.cos(fRayAngle), fEyeY = Math.sin(fRayAngle);
+			double fDist = 0;
+			boolean bHit = false;
+			int hitType = 0; // 1=bush, 2=tree, 3=boundary
 
-			double fStepSize = 0.005;
-			double fDistanceToWall = 0;
-			boolean bHitWall = false;
-
-			double fEyeX = Math.cos(fRayAngle);
-			double fEyeY = Math.sin(fRayAngle);
-
-			while (!bHitWall && fDistanceToWall < fDepth) {
-				fDistanceToWall += fStepSize;
-
-				int nTestX = (int) (fPlayerX + fEyeX * fDistanceToWall);
-				int nTestY = (int) (fPlayerY + fEyeY * fDistanceToWall);
-
-				if (nTestX < 0 || nTestX >= nMapWidth || nTestY < 0 || nTestY >= nMapHeight) {
-					bHitWall = true;
-					fDistanceToWall = fDepth;
-				} else if (map[nTestY].charAt(nTestX) == '#') {
-					bHitWall = true;
-
-					// -- Wall edge outlines (commented out to hide lines) --
-					// boolean bBoundary = false;
-					// for (int tx = 0; tx < 2; tx++) {
-					// for (int ty = 0; ty < 2; ty++) {
-					// double vx = (double) nTestX + tx - fPlayerX;
-					// double vy = (double) nTestY + ty - fPlayerY;
-					// double d = Math.sqrt(vx * vx + vy * vy);
-					// double dot = (fEyeX * vx / d) + (fEyeY * vy / d);
-					// if (Math.acos(Math.min(1.0, dot)) < 0.04 / fDistanceToWall) {
-					// bBoundary = true;
-					// }
-					// }
-					// }
-					// if (bBoundary) wallColor = Color.BLACK;
+			while (!bHit && fDist < fDepth) {
+				fDist += 0.01;
+				int nTestX = (int) (fPlayerX + fEyeX * fDist);
+				int nTestY = (int) (fPlayerY + fEyeY * fDist);
+				int cell = getCell(nTestX, nTestY);
+				if (nTestX < 0 || nTestX >= WORLD_W || nTestY < 0 || nTestY >= WORLD_H) {
+					bHit = true;
+					fDist = fDepth;
+					hitType = 3;
+				} else if (cell != 0) {
+					bHit = true;
+					hitType = cell;
 				}
 			}
 
-			fDepthBuffer[x] = fDistanceToWall;
+			fDepthBuffer[x] = fDist;
 
-			int nCeiling = (int) (nScreenHeight / 2.0 - nScreenHeight / fDistanceToWall);
+			int nCeiling = (int) (nScreenHeight / 2.0 - nScreenHeight / fDist);
 			int nFloor = nScreenHeight - nCeiling;
 
-			// Compute texture X from fractional wall hit position
-			double fHitX = fPlayerX + fEyeX * fDistanceToWall;
-			double fHitY = fPlayerY + fEyeY * fDistanceToWall;
+			// Pick texture based on hit type
+			int[] tex = (hitType == 2) ? texTree : (hitType == 1) ? texBush : texBrick;
+
+			// Texture X coord from hit position
+			double fHitX = fPlayerX + fEyeX * fDist;
+			double fHitY = fPlayerY + fEyeY * fDist;
 			int texX;
-			// Determine which face was hit to pick texture column
-			double fracX = fHitX - Math.floor(fHitX);
-			double fracY = fHitY - Math.floor(fHitY);
-			if (Math.abs(fEyeX) > Math.abs(fEyeY)) {
-				texX = (int) (fracY * TEX_W) & (TEX_W - 1);
-			} else {
-				texX = (int) (fracX * TEX_W) & (TEX_W - 1);
-			}
+			if (Math.abs(fEyeX) > Math.abs(fEyeY))
+				texX = (int) ((fHitY - Math.floor(fHitY)) * TEX_W) & (TEX_W - 1);
+			else
+				texX = (int) ((fHitX - Math.floor(fHitX)) * TEX_W) & (TEX_W - 1);
 
-			// Distance-based brightness: bright up close, dark far away (player torch
-			// effect)
-			float distBrightness = (float) Math.max(0.05, 1.0 - fDistanceToWall / fDepth);
-
-			// Face normal shading: walls facing the player head-on are brighter,
-			// walls at a glancing angle are darker — this is what creates the "shadow"
-			// when you stand close to a wall at an angle.
-			double nx, ny; // wall face normal
-			if (Math.abs(fEyeX) > Math.abs(fEyeY)) {
-				nx = (fEyeX > 0) ? -1 : 1;
-				ny = 0;
-			} else {
-				nx = 0;
-				ny = (fEyeY > 0) ? -1 : 1;
-			}
-			// Dot product of ray direction vs wall normal gives facing angle
-			double faceDot = Math.abs(fEyeX * nx + fEyeY * ny);
-			// Mix: head-on = full brightness, glancing = shadowed
-			float angleBrightness = (float) (0.4 + 0.6 * faceDot);
-
-			// Per-pixel falloff: pixels near the edge of the wall strip (top/bottom)
-			// are slightly darker to simulate the torch light cone
-			float brightness = distBrightness * angleBrightness;
+			// Lighting
+			float distBright = (float) Math.max(0.05, 1.0 - fDist / fDepth);
+			double nx = (Math.abs(fEyeX) > Math.abs(fEyeY)) ? ((fEyeX > 0) ? -1 : 1) : 0;
+			double ny = (Math.abs(fEyeX) > Math.abs(fEyeY)) ? 0 : ((fEyeY > 0) ? -1 : 1);
+			float angleBright = (float) (0.4 + 0.6 * Math.abs(fEyeX * nx + fEyeY * ny));
+			float brightness = distBright * angleBright;
 
 			for (int y = 0; y < nScreenHeight; y++) {
 				if (y > nCeiling && y <= nFloor) {
-					// Map screen y to texture y
 					int texY = (int) (((y - nCeiling) / (double) (nFloor - nCeiling)) * TEX_H) & (TEX_H - 1);
-					int texColor = wallTex[texY * TEX_W + texX];
-
-					// Vertical falloff: top and bottom of wall strip slightly darker
-					// (simulates torch light pointing slightly downward)
-					double wallMid = (nCeiling + nFloor) / 2.0;
-					double wallHalfH = (nFloor - nCeiling) / 2.0;
-					double vertOffset = Math.abs(y - wallMid) / (wallHalfH + 1);
-					float vertFade = (float) (1.0 - 0.25 * vertOffset * vertOffset);
-
-					float finalB = Math.max(0.05f, brightness * vertFade);
-					int r = Math.min(255, (int) (((texColor >> 16) & 0xFF) * finalB));
-					int g = Math.min(255, (int) (((texColor >> 8) & 0xFF) * finalB));
-					int b = Math.min(255, (int) ((texColor & 0xFF) * finalB));
+					int tc = tex[texY * TEX_W + texX];
+					double wallMid = (nCeiling + nFloor) / 2.0, wallHalfH = (nFloor - nCeiling) / 2.0 + 1;
+					float vf = (float) (1.0 - 0.25 * Math.pow(Math.abs(y - wallMid) / wallHalfH, 2));
+					float fb = Math.max(0.05f, brightness * vf);
+					int r = Math.min(255, (int) (((tc >> 16) & 0xFF) * fb));
+					int g = Math.min(255, (int) (((tc >> 8) & 0xFF) * fb));
+					int b = Math.min(255, (int) ((tc & 0xFF) * fb));
 					offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 				}
 			}
 		}
-		/* -- Draw enemies as sprites commented out */
 
 		// Wall proximity darkness overlay
-		// Cast 5 rays in a small fan to find the closest wall in front
 		double minWallDist = fDepth;
 		for (int ri = -2; ri <= 2; ri++) {
 			double rayA = fPlayerAngle + ri * 0.15;
@@ -395,125 +410,52 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 				rDist += 0.01;
 				int tx = (int) (fPlayerX + rEyeX * rDist);
 				int ty = (int) (fPlayerY + rEyeY * rDist);
-				if (tx < 0 || tx >= nMapWidth || ty < 0 || ty >= nMapHeight
-						|| map[ty].charAt(tx) == '#') {
+				if (getCell(tx, ty) != 0) {
 					minWallDist = Math.min(minWallDist, rDist);
 					break;
 				}
 			}
 		}
-		// 0.5 units ~ "5cm" in game space; ramp opacity 0→1 as dist goes 0.5→0
-		float proximityAlpha = (float) Math.max(0.0, Math.min(1.0, 1.0 - minWallDist / 0.5));
-		if (proximityAlpha > 0.01f) {
-			for (int py = 0; py < nScreenHeight; py++) {
+		float proxAlpha = (float) Math.max(0.0, Math.min(1.0, 1.0 - minWallDist / 0.5));
+		if (proxAlpha > 0.01f) {
+			for (int py = 0; py < nScreenHeight; py++)
 				for (int px = 0; px < nScreenWidth; px++) {
 					int col = offscreen.getRGB(px, py);
-					int r = (int) (((col >> 16) & 0xFF) * (1 - proximityAlpha));
-					int g = (int) (((col >> 8) & 0xFF) * (1 - proximityAlpha));
-					int b = (int) ((col & 0xFF) * (1 - proximityAlpha));
+					int r = (int) (((col >> 16) & 0xFF) * (1 - proxAlpha));
+					int g = (int) (((col >> 8) & 0xFF) * (1 - proxAlpha));
+					int b = (int) ((col & 0xFF) * (1 - proxAlpha));
 					offscreen.setRGB(px, py, (r << 16) | (g << 8) | b);
 				}
-			}
 		}
 
-		// HUD
 		offG.drawImage(offscreen, 0, 0, null);
 		drawHUD(offG);
 	}
 
-	private Color getEnemyPixel(double tx, double ty, double dist) {
-		// Simple pixel art demon shape
-		// Head (upper quarter)
-		float bright = (float) Math.max(0.2, 1.0 - dist / fDepth);
-
-		if (ty < 0.3) {
-			// Head area
-			if (tx > 0.25 && tx < 0.75) {
-				// Face - red-brown
-				if (ty > 0.05 && ty < 0.25) {
-					// Eyes
-					if ((tx > 0.3 && tx < 0.42) || (tx > 0.58 && tx < 0.7)) {
-						if (ty > 0.1 && ty < 0.2) {
-							return new Color((int) (255 * bright), (int) (50 * bright), 0);
-						}
-					}
-					return new Color((int) (120 * bright), (int) (60 * bright), (int) (30 * bright));
-				}
-				// Horns
-				if (ty < 0.05) {
-					if ((tx > 0.25 && tx < 0.38) || (tx > 0.62 && tx < 0.75)) {
-						return new Color((int) (80 * bright), (int) (40 * bright), (int) (20 * bright));
-					}
-				}
-			}
-		} else if (ty < 0.7) {
-			// Body
-			if (tx > 0.2 && tx < 0.8) {
-				// Arms
-				if ((tx > 0.2 && tx < 0.32) || (tx > 0.68 && tx < 0.8)) {
-					return new Color((int) (100 * bright), (int) (50 * bright), (int) (25 * bright));
-				}
-				// Torso
-				if (tx > 0.32 && tx < 0.68) {
-					return new Color((int) (140 * bright), (int) (70 * bright), (int) (35 * bright));
-				}
-			}
-		} else {
-			// Legs
-			if ((tx > 0.28 && tx < 0.48) || (tx > 0.52 && tx < 0.72)) {
-				return new Color((int) (100 * bright), (int) (50 * bright), (int) (25 * bright));
-			}
-		}
-
-		return null; // transparent
-	}
+	// ── HUD ───────────────────────────────────────────────────────
 
 	private void drawHUD(Graphics2D g) {
-		// HUD background bar
-		g.setColor(new Color(0, 0, 0, 180));
-		g.fillRect(0, nScreenHeight - 80, nScreenWidth, 80);
-
-		// Health bar
-		// g.setColor(new Color(60, 0, 0));
-		// g.fillRect(20, nScreenHeight - 55, 200, 25);
-		// g.setColor(nHealth > 50 ? new Color(200, 50, 50) : new Color(255, 0, 0));
-		// g.fillRect(20, nScreenHeight - 55, (int)(nHealth * 2), 25);
-		// g.setColor(Color.WHITE);
-		// g.setFont(new Font("Courier New", Font.BOLD, 16));
-		// g.drawString("HP: " + nHealth, 25, nScreenHeight - 35);
-
-		// Ammo
-		// g.setColor(new Color(200, 180, 50));
-		// g.setFont(new Font("Courier New", Font.BOLD, 16));
-		// g.drawString("AMMO: " + nAmmo, nScreenWidth - 150, nScreenHeight - 35);
-
-		// Weapon sprite (simple gun shape)
-		// drawGun(g);
+		// FPS
+		g.setColor(new Color(180, 180, 180, 200));
+		g.setFont(new Font("Courier New", Font.PLAIN, 11));
+		g.drawString(String.format("FPS: %.0f", fps), 10, 20);
 
 		// Crosshair
-		int cx = nScreenWidth / 2;
-		int cy = nScreenHeight / 2;
+		int cx = nScreenWidth / 2, cy = nScreenHeight / 2;
 		g.setColor(new Color(255, 255, 255, 180));
 		g.drawLine(cx - 12, cy, cx - 4, cy);
 		g.drawLine(cx + 4, cy, cx + 12, cy);
 		g.drawLine(cx, cy - 12, cx, cy - 4);
 		g.drawLine(cx, cy + 4, cx, cy + 12);
 
-		// FPS counter
-		g.setColor(new Color(150, 150, 150, 200));
+		// Controls
+		g.setColor(new Color(150, 150, 150, 180));
 		g.setFont(new Font("Courier New", Font.PLAIN, 11));
-		g.drawString(String.format("FPS: %.0f", fps), 10, 20);
+		g.drawString("WASD/Arrows: Move | Q/E: Strafe | R: Restart", 10, nScreenHeight - 10);
 
-		// Mini map
+		// Mini biome map (top-left)
 		drawMiniMap(g);
 
-		// Shoot flash
-		if (bShooting && nShootTimer > 3) {
-			g.setColor(new Color(255, 200, 0, 80));
-			g.fillRect(0, 0, nScreenWidth, nScreenHeight);
-		}
-
-		// Game over
 		if (bGameOver) {
 			g.setColor(new Color(180, 0, 0, 200));
 			g.fillRect(0, 0, nScreenWidth, nScreenHeight);
@@ -524,75 +466,63 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			g.setFont(new Font("Courier New", Font.PLAIN, 24));
 			g.drawString("Press R to restart", nScreenWidth / 2 - 120, nScreenHeight / 2 + 60);
 		}
-
-		// Controls help
-		g.setColor(new Color(150, 150, 150, 180));
-		g.setFont(new Font("Courier New", Font.PLAIN, 11));
-		g.drawString("WASD/Arrows: Move | Q/E: Strafe | SPACE: Shoot | R: Restart", 10, nScreenHeight - 10);
-	}
-
-	private void drawGun(Graphics2D g) {
-		int gx = nScreenWidth / 2 + (bShooting ? 5 : 0);
-		int gy = nScreenHeight - (bShooting ? 60 : 80);
-
-		// Gun barrel
-		g.setColor(new Color(80, 80, 80));
-		g.fillRect(gx - 8, gy - 40, 16, 60);
-		g.setColor(new Color(50, 50, 50));
-		g.fillRect(gx - 4, gy - 50, 8, 20);
-
-		// Gun handle
-		g.setColor(new Color(100, 70, 40));
-		g.fillRect(gx - 15, gy - 10, 30, 40);
-
-		// Trigger guard
-		g.setColor(new Color(80, 80, 80));
-		g.drawArc(gx - 10, gy + 5, 20, 20, 0, -180);
-
-		// Muzzle flash
-		if (bShooting && nShootTimer > 5) {
-			g.setColor(new Color(255, 220, 50, 200));
-			g.fillOval(gx - 15, gy - 75, 30, 30);
-			g.setColor(new Color(255, 100, 0, 150));
-			g.fillOval(gx - 20, gy - 85, 40, 40);
-		}
 	}
 
 	private void drawMiniMap(Graphics2D g) {
-		int mapScale = 6;
-		int mapOffX = nScreenWidth - nMapWidth * mapScale - 10;
-		int mapOffY = 10;
+		// Draw at top-right. Each biome cell = 8px, sub-tiles = 8/10 px (approx 1px)
+		int cellPx = 8; // pixels per biome cell on minimap
+		int subPx = 1; // pixels per sub-tile (10 sub-tiles per biome cell → ~8px/10 ≈ shown as biome
+						// colour)
+		int mapW = BIOME_COLS * cellPx;
+		int mapH = BIOME_ROWS * cellPx;
+		int offX = nScreenWidth - mapW - 10;
+		int offY = 10;
 
 		// Background
 		g.setColor(new Color(0, 0, 0, 160));
-		g.fillRect(mapOffX - 2, mapOffY - 2, nMapWidth * mapScale + 4, nMapHeight * mapScale + 4);
+		g.fillRect(offX - 2, offY - 2, mapW + 4, mapH + 4);
 
-		// Draw map tiles
-		for (int my = 0; my < nMapHeight; my++) {
-			for (int mx = 0; mx < nMapWidth; mx++) {
-				if (map[my].charAt(mx) == '#') {
-					g.setColor(new Color(160, 80, 40));
-				} else {
-					g.setColor(new Color(40, 40, 40));
-				}
-				g.fillRect(mapOffX + mx * mapScale, mapOffY + my * mapScale, mapScale - 1, mapScale - 1);
+		// Draw biome cells with colour coding
+		for (int by = 0; by < BIOME_ROWS; by++) {
+			for (int bx = 0; bx < BIOME_COLS; bx++) {
+				int biome = biomeMap[by][bx];
+				Color c = (biome == 1) ? new Color(180, 200, 80) : // flatland: yellow-green
+						(biome == 2) ? new Color(60, 160, 60) : // bushland: mid green
+								new Color(30, 100, 30); // treeland: dark green
+				g.setColor(c);
+				g.fillRect(offX + bx * cellPx, offY + by * cellPx, cellPx - 1, cellPx - 1);
 			}
 		}
 
-		/* -- Draw enemies on minimap commented out */
+		// Player dot
+		int px = offX + (int) (fPlayerX / TILE_SIZE * cellPx);
+		int py = offY + (int) (fPlayerY / TILE_SIZE * cellPx);
+		g.setColor(Color.WHITE);
+		g.fillOval(px - 2, py - 2, 5, 5);
 
-		// Draw player
-		g.setColor(Color.GREEN);
-		g.fillOval(mapOffX + (int) (fPlayerX * mapScale) - 3,
-				mapOffY + (int) (fPlayerY * mapScale) - 3, 6, 6);
-
-		// Draw player direction
+		// Direction line
 		g.setColor(Color.YELLOW);
-		g.drawLine(mapOffX + (int) (fPlayerX * mapScale),
-				mapOffY + (int) (fPlayerY * mapScale),
-				mapOffX + (int) ((fPlayerX + Math.cos(fPlayerAngle) * 1.5) * mapScale),
-				mapOffY + (int) ((fPlayerY + Math.sin(fPlayerAngle) * 1.5) * mapScale));
+		g.drawLine(px, py,
+				(int) (px + Math.cos(fPlayerAngle) * 6),
+				(int) (py + Math.sin(fPlayerAngle) * 6));
+
+		// Legend
+		g.setFont(new Font("Courier New", Font.PLAIN, 9));
+		g.setColor(new Color(180, 200, 80));
+		g.fillRect(offX, offY + mapH + 4, 8, 8);
+		g.setColor(Color.WHITE);
+		g.drawString("Flat", offX + 10, offY + mapH + 12);
+		g.setColor(new Color(60, 160, 60));
+		g.fillRect(offX, offY + mapH + 14, 8, 8);
+		g.setColor(Color.WHITE);
+		g.drawString("Bush", offX + 10, offY + mapH + 22);
+		g.setColor(new Color(30, 100, 30));
+		g.fillRect(offX, offY + mapH + 24, 8, 8);
+		g.setColor(Color.WHITE);
+		g.drawString("Trees", offX + 10, offY + mapH + 32);
 	}
+
+	// ── INPUT ─────────────────────────────────────────────────────
 
 	private void shoot() {
 		if (bShooting || nAmmo <= 0)
@@ -600,26 +530,19 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		bShooting = true;
 		nShootTimer = 10;
 		nAmmo--;
-
-		// Raycast straight forward to check hits
-		double fEyeX = Math.cos(fPlayerAngle);
-		double fEyeY = Math.sin(fPlayerAngle);
-
 		// -- Shoot enemy detection commented out --
 		// for (int e = 0; e < nEnemyCount; e++) { ... }
 	}
 
 	private void restart() {
-		fPlayerX = 1.5;
-		fPlayerY = 7.5;
+		fPlayerX = 5.0;
+		fPlayerY = 5.0;
 		fPlayerAngle = 0;
 		nHealth = 100;
 		nAmmo = 30;
 		bGameOver = false;
 		bShooting = false;
 		// for (int i = 0; i < nEnemyCount; i++) enemyAlive[i] = true;
-		// enemyX = new double[]{5.5, 10.5, 12.5};
-		// enemyY = new double[]{5.5, 9.5, 3.5};
 	}
 
 	@Override
@@ -630,20 +553,20 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 	@Override
 	public void keyPressed(KeyEvent e) {
-		int code = e.getKeyCode();
-		if (code < 256)
-			keys[code] = true;
-		if (code == KeyEvent.VK_SPACE)
+		int c = e.getKeyCode();
+		if (c < 256)
+			keys[c] = true;
+		if (c == KeyEvent.VK_SPACE)
 			shoot();
-		if (code == KeyEvent.VK_R)
+		if (c == KeyEvent.VK_R)
 			restart();
 	}
 
 	@Override
 	public void keyReleased(KeyEvent e) {
-		int code = e.getKeyCode();
-		if (code < 256)
-			keys[code] = false;
+		int c = e.getKeyCode();
+		if (c < 256)
+			keys[c] = false;
 	}
 
 	@Override
@@ -651,7 +574,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	public static void main(String[] args) {
-		JFrame frame = new JFrame("DOOM-J  |  DOOM-like Raycaster in Java");
+		JFrame frame = new JFrame("DOOM-J | Biome World");
 		FPSJFrame game = new FPSJFrame();
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.add(game);
