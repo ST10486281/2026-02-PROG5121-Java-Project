@@ -338,63 +338,100 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 		double[] fDepthBuffer = new double[nScreenWidth];
 
-		// Raycasting
+		// Raycasting — each column collects up to 2 hits (bush + tree behind it)
 		for (int x = 0; x < nScreenWidth; x++) {
 			double fRayAngle = (fPlayerAngle - fFOV / 2.0) + ((double) x / nScreenWidth) * fFOV;
 			double fEyeX = Math.cos(fRayAngle), fEyeY = Math.sin(fRayAngle);
-			double fDist = 0;
-			boolean bHit = false;
-			int hitType = 0; // 1=bush, 2=tree, 3=boundary
 
-			while (!bHit && fDist < fDepth) {
+			// Collect hits: first solid, and if it's a bush also find next solid behind it
+			double[] hitDist = new double[2];
+			int[] hitType = new int[2];
+			int hitCount = 0;
+			double fDist = 0;
+			int lastCell = 0;
+
+			while (fDist < fDepth && hitCount < 2) {
 				fDist += 0.01;
 				int nTestX = (int) (fPlayerX + fEyeX * fDist);
 				int nTestY = (int) (fPlayerY + fEyeY * fDist);
-				int cell = getCell(nTestX, nTestY);
 				if (nTestX < 0 || nTestX >= WORLD_W || nTestY < 0 || nTestY >= WORLD_H) {
-					bHit = true;
-					fDist = fDepth;
-					hitType = 3;
-				} else if (cell != 0) {
-					bHit = true;
-					hitType = cell;
+					// boundary — stop
+					hitDist[hitCount] = fDepth;
+					hitType[hitCount] = 3;
+					hitCount++;
+					break;
+				}
+				int cell = getCell(nTestX, nTestY);
+				if (cell != 0 && cell != lastCell) {
+					hitDist[hitCount] = fDist;
+					hitType[hitCount] = cell;
+					hitCount++;
+					lastCell = cell;
+					// Only keep going if this hit was a bush (so we can see tree behind it)
+					if (cell != 1)
+						break;
+				} else if (cell == 0) {
+					lastCell = 0; // left the previous solid, reset so we can hit the next
 				}
 			}
 
-			fDepthBuffer[x] = fDist;
+			// depth buffer = first hit (closest solid)
+			fDepthBuffer[x] = hitCount > 0 ? hitDist[0] : fDepth;
 
-			int nCeiling = (int) (nScreenHeight / 2.0 - nScreenHeight / fDist);
-			int nFloor = nScreenHeight - nCeiling;
-			// Bushes are shorter — scale their height down to 40% of a full wall
-			if (hitType == 1) {
-				double bushScale = 0.4;
-				int wallH = nFloor - nCeiling;
-				int newH = (int) (wallH * bushScale);
-				nCeiling = nScreenHeight / 2 - newH / 2;
-				nFloor = nScreenHeight / 2 + newH / 2;
+			// Pre-compute each hit's screen band so we can clip correctly
+			int[] ceilArr = new int[hitCount];
+			int[] floorArr = new int[hitCount];
+			for (int hi = 0; hi < hitCount; hi++) {
+				double hDist = hitDist[hi];
+				int c = (int) (nScreenHeight / 2.0 - nScreenHeight / hDist);
+				int f = nScreenHeight - c;
+				if (hitType[hi] == 1) {
+					int wh = f - c;
+					c = f - (int) (wh * 0.4);
+				}
+				ceilArr[hi] = c;
+				floorArr[hi] = f;
 			}
 
-			// Pick texture based on hit type
-			int[] tex = (hitType == 2) ? texTree : (hitType == 1) ? texBush : texBrick;
+			// Render back-to-front. For each hit, only draw pixels NOT already covered
+			// by a closer hit's solid band (so tree top shows above bush).
+			for (int hi = hitCount - 1; hi >= 0; hi--) {
+				double hDist = hitDist[hi];
+				int hType = hitType[hi];
+				int nCeiling = ceilArr[hi];
+				int nFloor = floorArr[hi];
 
-			// Texture X coord from hit position
-			double fHitX = fPlayerX + fEyeX * fDist;
-			double fHitY = fPlayerY + fEyeY * fDist;
-			int texX;
-			if (Math.abs(fEyeX) > Math.abs(fEyeY))
-				texX = (int) ((fHitY - Math.floor(fHitY)) * TEX_W) & (TEX_W - 1);
-			else
-				texX = (int) ((fHitX - Math.floor(fHitX)) * TEX_W) & (TEX_W - 1);
+				int[] tex = (hType == 2) ? texTree : (hType == 1) ? texBush : texBrick;
 
-			// Lighting
-			float distBright = (float) Math.max(0.05, 1.0 - fDist / fDepth);
-			double nx = (Math.abs(fEyeX) > Math.abs(fEyeY)) ? ((fEyeX > 0) ? -1 : 1) : 0;
-			double ny = (Math.abs(fEyeX) > Math.abs(fEyeY)) ? 0 : ((fEyeY > 0) ? -1 : 1);
-			float angleBright = (float) (0.4 + 0.6 * Math.abs(fEyeX * nx + fEyeY * ny));
-			float brightness = distBright * angleBright;
+				double fHitX = fPlayerX + fEyeX * hDist;
+				double fHitY = fPlayerY + fEyeY * hDist;
+				int texX;
+				if (Math.abs(fEyeX) > Math.abs(fEyeY))
+					texX = (int) ((fHitY - Math.floor(fHitY)) * TEX_W) & (TEX_W - 1);
+				else
+					texX = (int) ((fHitX - Math.floor(fHitX)) * TEX_W) & (TEX_W - 1);
 
-			for (int y = 0; y < nScreenHeight; y++) {
-				if (y > nCeiling && y <= nFloor) {
+				float distBright = (float) Math.max(0.05, 1.0 - hDist / fDepth);
+				double nx = (Math.abs(fEyeX) > Math.abs(fEyeY)) ? ((fEyeX > 0) ? -1 : 1) : 0;
+				double ny = (Math.abs(fEyeX) > Math.abs(fEyeY)) ? 0 : ((fEyeY > 0) ? -1 : 1);
+				float angleBright = (float) (0.4 + 0.6 * Math.abs(fEyeX * nx + fEyeY * ny));
+				float brightness = distBright * angleBright;
+
+				for (int y = 0; y < nScreenHeight; y++) {
+					if (y <= nCeiling || y > nFloor)
+						continue;
+
+					// Skip pixels that are inside a closer hit's solid band
+					boolean occluded = false;
+					for (int fhi = 0; fhi < hi; fhi++) {
+						if (y > ceilArr[fhi] && y <= floorArr[fhi]) {
+							occluded = true;
+							break;
+						}
+					}
+					if (occluded)
+						continue;
+
 					int texY = (int) (((y - nCeiling) / (double) (nFloor - nCeiling)) * TEX_H) & (TEX_H - 1);
 					int tc = tex[texY * TEX_W + texX];
 					double wallMid = (nCeiling + nFloor) / 2.0, wallHalfH = (nFloor - nCeiling) / 2.0 + 1;
