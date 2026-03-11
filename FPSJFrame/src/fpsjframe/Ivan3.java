@@ -110,7 +110,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	// Wall for collision: boundary and trunk only
 	private boolean isSolid(double wx, double wy) {
 		int c = getCell((int) wx, (int) wy);
-		return c < 0 || c == 0; // boundary walls and trunk block movement
+		return c < 0 || c == 10; // boundary walls (-1) and trunk (10) block movement
 	}
 
 	// ── GAME STATE ────────────────────────────────────────────────
