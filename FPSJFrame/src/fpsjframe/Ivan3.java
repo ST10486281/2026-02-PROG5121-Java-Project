@@ -347,22 +347,51 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 				texX = (int) (fracX * TEX_W) & (TEX_W - 1);
 			}
 
-			// Distance-based brightness
-			float brightness = (float) Math.max(0.15, 1.0 - fDistanceToWall / fDepth);
+			// Distance-based brightness: bright up close, dark far away (player torch
+			// effect)
+			float distBrightness = (float) Math.max(0.05, 1.0 - fDistanceToWall / fDepth);
+
+			// Face normal shading: walls facing the player head-on are brighter,
+			// walls at a glancing angle are darker — this is what creates the "shadow"
+			// when you stand close to a wall at an angle.
+			double nx, ny; // wall face normal
+			if (Math.abs(fEyeX) > Math.abs(fEyeY)) {
+				nx = (fEyeX > 0) ? -1 : 1;
+				ny = 0;
+			} else {
+				nx = 0;
+				ny = (fEyeY > 0) ? -1 : 1;
+			}
+			// Dot product of ray direction vs wall normal gives facing angle
+			double faceDot = Math.abs(fEyeX * nx + fEyeY * ny);
+			// Mix: head-on = full brightness, glancing = shadowed
+			float angleBrightness = (float) (0.4 + 0.6 * faceDot);
+
+			// Per-pixel falloff: pixels near the edge of the wall strip (top/bottom)
+			// are slightly darker to simulate the torch light cone
+			float brightness = distBrightness * angleBrightness;
 
 			for (int y = 0; y < nScreenHeight; y++) {
 				if (y > nCeiling && y <= nFloor) {
 					// Map screen y to texture y
 					int texY = (int) (((y - nCeiling) / (double) (nFloor - nCeiling)) * TEX_H) & (TEX_H - 1);
 					int texColor = wallTex[texY * TEX_W + texX];
-					int r = (int) (((texColor >> 16) & 0xFF) * brightness);
-					int g = (int) (((texColor >> 8) & 0xFF) * brightness);
-					int b = (int) ((texColor & 0xFF) * brightness);
+
+					// Vertical falloff: top and bottom of wall strip slightly darker
+					// (simulates torch light pointing slightly downward)
+					double wallMid = (nCeiling + nFloor) / 2.0;
+					double wallHalfH = (nFloor - nCeiling) / 2.0;
+					double vertOffset = Math.abs(y - wallMid) / (wallHalfH + 1);
+					float vertFade = (float) (1.0 - 0.25 * vertOffset * vertOffset);
+
+					float finalB = Math.max(0.05f, brightness * vertFade);
+					int r = Math.min(255, (int) (((texColor >> 16) & 0xFF) * finalB));
+					int g = Math.min(255, (int) (((texColor >> 8) & 0xFF) * finalB));
+					int b = Math.min(255, (int) ((texColor & 0xFF) * finalB));
 					offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 				}
 			}
 		}
-
 		// Draw enemies as sprites
 		for (int e = 0; e < nEnemyCount; e++) {
 			if (!enemyAlive[e])
@@ -409,6 +438,38 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 							offscreen.setRGB(ex, ey, c.getRGB());
 						}
 					}
+				}
+			}
+		}
+
+		// Wall proximity darkness overlay
+		// Cast 5 rays in a small fan to find the closest wall in front
+		double minWallDist = fDepth;
+		for (int ri = -2; ri <= 2; ri++) {
+			double rayA = fPlayerAngle + ri * 0.15;
+			double rEyeX = Math.cos(rayA), rEyeY = Math.sin(rayA);
+			double rDist = 0;
+			while (rDist < 1.5) {
+				rDist += 0.01;
+				int tx = (int) (fPlayerX + rEyeX * rDist);
+				int ty = (int) (fPlayerY + rEyeY * rDist);
+				if (tx < 0 || tx >= nMapWidth || ty < 0 || ty >= nMapHeight
+						|| map[ty].charAt(tx) == '#') {
+					minWallDist = Math.min(minWallDist, rDist);
+					break;
+				}
+			}
+		}
+		// 0.5 units ~ "5cm" in game space; ramp opacity 0→1 as dist goes 0.5→0
+		float proximityAlpha = (float) Math.max(0.0, Math.min(1.0, 1.0 - minWallDist / 0.5));
+		if (proximityAlpha > 0.01f) {
+			for (int py = 0; py < nScreenHeight; py++) {
+				for (int px = 0; px < nScreenWidth; px++) {
+					int col = offscreen.getRGB(px, py);
+					int r = (int) (((col >> 16) & 0xFF) * (1 - proximityAlpha));
+					int g = (int) (((col >> 8) & 0xFF) * (1 - proximityAlpha));
+					int b = (int) ((col & 0xFF) * (1 - proximityAlpha));
+					offscreen.setRGB(px, py, (r << 16) | (g << 8) | b);
 				}
 			}
 		}
