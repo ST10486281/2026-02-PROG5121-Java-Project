@@ -12,7 +12,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 	// Player position in 3D world
 	private double fPlayerX = 5.0, fPlayerY = 15.0;
-	private double fPlayerZ = 0.5; // eye height (world units)
+	private double fPlayerZ = 4.0; // eye height (world units)
 	private double fPlayerAngle = 0.0;
 	private final double fFOV = Math.PI / 3.0;
 	private final double fDepth = 32.0, fSpeed = 5.0;
@@ -20,7 +20,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 	// ── 3D VOXEL WORLD ────────────────────────────────────────────
 	// World is WORLD_W × WORLD_H tiles in XY, WORLD_Z voxels tall in Z
-	private static final int WORLD_W = 30, WORLD_H = 30, WORLD_Z = 16;
+	private static final int WORLD_W = 30, WORLD_H = 30, WORLD_Z = 8;
 
 	// Voxel grid: voxels[z][y][x] = cell type
 	// 0 = air
@@ -97,7 +97,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		// Trunk: straight up (0,0,1) with slight random lean
 		double leanX = (rng.nextDouble() - 0.5) * 0.15;
 		double leanY = (rng.nextDouble() - 0.5) * 0.15;
-		growBranch(tx, ty, 0, leanX, leanY, 1.0, 9.0 + rng.nextDouble() * 3, 0, 4, rng);
+		growBranch(tx, ty, 0, leanX, leanY, 1.0, 4.0 + rng.nextDouble() * 1.0, 0, 3, rng);
 	}
 
 	// ── 3D VECTOR HELPERS ─────────────────────────────────────────
