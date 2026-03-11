@@ -12,8 +12,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	private final int nScreenHeight = 600;
 
 	// Player state
-	private double fPlayerX = 2.5;
-	private double fPlayerY = 2.5;
+	private double fPlayerX = 1.5;
+	private double fPlayerY = 7.5;
 	private double fPlayerAngle = 0.0;
 	private double fFOV = Math.PI / 3.0; // 60 degrees
 	private double fDepth = 16.0;
@@ -23,32 +23,40 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	private boolean[] keys = new boolean[256];
 
 	// Map
-	private final int nMapWidth = 16;
-	private final int nMapHeight = 16;
+	private final int nMapWidth = 24;
+	private final int nMapHeight = 24;
 	private String[] map = {
-			"################",
-			"#..............#",
-			"#..####........#",
-			"#..#...........#",
-			"#..#...####....#",
-			"#..#...#...#...#",
-			"#......#...#...#",
-			"####...#...#...#",
-			"#......#...#...#",
-			"#......#####...#",
-			"#..............#",
-			"#....######....#",
-			"#....#.....#...#",
-			"#....#.....#...#",
-			"#..............#",
-			"################"
+			"########################",
+			"#....##....#.....##....#",
+			"#.#####....#.....#####.#",
+			"#.#...#....#.....#...#.#",
+			"#.#........#.........#.#",
+			"#.#...#....#.....#...#.#",
+			"#.#####....#.....#####.#",
+			"#......................#",
+			"#.......########.......#",
+			"#.......#......#.......#",
+			"#.......#.#..#.#.......#",
+			"#######.#......#.......#",
+			"#.......#......#.#######",
+			"#.......#.#..#.#.......#",
+			"#.......#......#.......#",
+			"#.......########.......#",
+			"#......................#",
+			"#.######....#...######.#",
+			"#.#....#....#...#....#.#",
+			"#.#.........#........#.#",
+			"#.#....#....#...#....#.#",
+			"#.######....#...######.#",
+			"#....##.....#....##....#",
+			"########################"
 	};
 
 	// Enemy state
-	private double[] enemyX = { 5.5, 10.5, 12.5 };
-	private double[] enemyY = { 5.5, 9.5, 3.5 };
-	private boolean[] enemyAlive = { true, true, true };
-	private int nEnemyCount = 3;
+	private double[] enemyX = { 11.5, 5.5, 18.5, 11.5, 3.5, 19.5, 11.5 };
+	private double[] enemyY = { 11.5, 19.5, 4.5, 19.5, 4.5, 19.5, 4.5 };
+	private boolean[] enemyAlive = { true, true, true, true, true, true, true };
+	private int nEnemyCount = 7;
 
 	// Game state
 	private int nHealth = 100;
@@ -260,7 +268,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 							double dot = (fEyeX * vx / d) + (fEyeY * vy / d);
 							fBoundVecX[idx] = vx;
 							fBoundVecY[idx] = vy;
-							if (Math.acos(dot) < 0.01) {
+							if (Math.acos(Math.min(1.0, dot)) < 0.04 / fDistanceToWall) {
 								bBoundary = true;
 							}
 						}
@@ -551,8 +559,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	}
 
 	private void restart() {
-		fPlayerX = 2.5;
-		fPlayerY = 2.5;
+		fPlayerX = 1.5;
+		fPlayerY = 7.5;
 		fPlayerAngle = 0;
 		nHealth = 100;
 		nAmmo = 30;
