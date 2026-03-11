@@ -76,6 +76,11 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 	private Color[] wallShades = new Color[10];
 	private Color[] floorShades = new Color[10];
 
+	// Wall texture (generated procedurally)
+	private static final int TEX_W = 64;
+	private static final int TEX_H = 64;
+	private int[] wallTex = new int[TEX_W * TEX_H];
+
 	public FPSJFrame() {
 		setPreferredSize(new Dimension(nScreenWidth, nScreenHeight));
 		setBackground(Color.BLACK);
@@ -94,6 +99,59 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 		for (int i = 0; i < 10; i++) {
 			float brightness = (i + 1) / 10.0f;
 			floorShades[i] = new Color((int) (60 * brightness), (int) (60 * brightness), (int) (60 * brightness));
+		}
+
+		// Generate procedural stone wall texture using layered noise
+		java.util.Random rng = new java.util.Random(42);
+		// Base noise layer
+		float[] noise = new float[TEX_W * TEX_H];
+		for (int i = 0; i < noise.length; i++)
+			noise[i] = rng.nextFloat();
+		// Smooth with box blur passes to get natural variation
+		for (int pass = 0; pass < 3; pass++) {
+			float[] tmp = new float[TEX_W * TEX_H];
+			for (int ty = 0; ty < TEX_H; ty++) {
+				for (int tx = 0; tx < TEX_W; tx++) {
+					float sum = 0;
+					int cnt = 0;
+					for (int dy = -2; dy <= 2; dy++) {
+						for (int dx = -2; dx <= 2; dx++) {
+							int nx = (tx + dx + TEX_W) % TEX_W, ny = (ty + dy + TEX_H) % TEX_H;
+							sum += noise[ny * TEX_W + nx];
+							cnt++;
+						}
+					}
+					tmp[ty * TEX_W + tx] = sum / cnt;
+				}
+			}
+			noise = tmp;
+		}
+		// Add mortar lines (horizontal and vertical brick pattern)
+		for (int ty = 0; ty < TEX_H; ty++) {
+			for (int tx = 0; tx < TEX_W; tx++) {
+				float n = noise[ty * TEX_W + tx];
+				// Brick rows every 8 pixels, offset every other row
+				int row = ty / 8;
+				int offset = (row % 2 == 0) ? 0 : TEX_W / 2;
+				int brickX = (tx + offset) % TEX_W;
+				boolean mortarH = (ty % 8 == 0) || (ty % 8 == 7);
+				boolean mortarV = (brickX % 16 == 0) || (brickX % 16 == 15);
+				boolean mortar = mortarH || mortarV;
+				int r, g, b;
+				if (mortar) {
+					// grey mortar
+					int v = (int) (60 + n * 30);
+					r = v;
+					g = v;
+					b = v;
+				} else {
+					// reddish-brown brick with noise variation
+					r = (int) (120 + n * 60);
+					g = (int) (55 + n * 30);
+					b = (int) (30 + n * 20);
+				}
+				wallTex[ty * TEX_W + tx] = (r << 16) | (g << 8) | b;
+			}
 		}
 
 		Thread thread = new Thread(this);
@@ -276,17 +334,32 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			int nCeiling = (int) (nScreenHeight / 2.0 - nScreenHeight / fDistanceToWall);
 			int nFloor = nScreenHeight - nCeiling;
 
-			// Wall shading based on distance
-			int shadeIndex = (int) Math.min(fDistanceToWall / fDepth * 10, 9);
-			Color wallColor = wallShades[9 - shadeIndex];
+			// Compute texture X from fractional wall hit position
+			double fHitX = fPlayerX + fEyeX * fDistanceToWall;
+			double fHitY = fPlayerY + fEyeY * fDistanceToWall;
+			int texX;
+			// Determine which face was hit to pick texture column
+			double fracX = fHitX - Math.floor(fHitX);
+			double fracY = fHitY - Math.floor(fHitY);
+			if (Math.abs(fEyeX) > Math.abs(fEyeY)) {
+				texX = (int) (fracY * TEX_W) & (TEX_W - 1);
+			} else {
+				texX = (int) (fracX * TEX_W) & (TEX_W - 1);
+			}
+
+			// Distance-based brightness
+			float brightness = (float) Math.max(0.15, 1.0 - fDistanceToWall / fDepth);
 
 			for (int y = 0; y < nScreenHeight; y++) {
-				if (y <= nCeiling) {
-					// ceiling - already drawn
-				} else if (y > nCeiling && y <= nFloor) {
-					offscreen.setRGB(x, y, wallColor.getRGB());
+				if (y > nCeiling && y <= nFloor) {
+					// Map screen y to texture y
+					int texY = (int) (((y - nCeiling) / (double) (nFloor - nCeiling)) * TEX_H) & (TEX_H - 1);
+					int texColor = wallTex[texY * TEX_W + texX];
+					int r = (int) (((texColor >> 16) & 0xFF) * brightness);
+					int g = (int) (((texColor >> 8) & 0xFF) * brightness);
+					int b = (int) ((texColor & 0xFF) * brightness);
+					offscreen.setRGB(x, y, (r << 16) | (g << 8) | b);
 				}
-				// floor - already drawn
 			}
 		}
 
