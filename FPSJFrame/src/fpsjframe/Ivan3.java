@@ -365,6 +365,14 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
 			int nCeiling = (int) (nScreenHeight / 2.0 - nScreenHeight / fDist);
 			int nFloor = nScreenHeight - nCeiling;
+			// Bushes are shorter — scale their height down to 40% of a full wall
+			if (hitType == 1) {
+				double bushScale = 0.4;
+				int wallH = nFloor - nCeiling;
+				int newH = (int) (wallH * bushScale);
+				nCeiling = nScreenHeight / 2 - newH / 2;
+				nFloor = nScreenHeight / 2 + newH / 2;
+			}
 
 			// Pick texture based on hit type
 			int[] tex = (hitType == 2) ? texTree : (hitType == 1) ? texBush : texBrick;
