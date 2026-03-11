@@ -238,7 +238,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			double fStepSize = 0.005;
 			double fDistanceToWall = 0;
 			boolean bHitWall = false;
-			boolean bBoundary = false;
+			// boolean bBoundary = false;
 
 			double fEyeX = Math.cos(fRayAngle);
 			double fEyeY = Math.sin(fRayAngle);
@@ -255,24 +255,24 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 				} else if (map[nTestY].charAt(nTestX) == '#') {
 					bHitWall = true;
 
-					// Check for boundary (edge between wall tiles)
-					double[] fBoundVecX = new double[4];
-					double[] fBoundVecY = new double[4];
+					// // Check for boundary (edge between wall tiles)
+					// double[] fBoundVecX = new double[4];
+					// double[] fBoundVecY = new double[4];
 
-					for (int tx = 0; tx < 2; tx++) {
-						for (int ty = 0; ty < 2; ty++) {
-							int idx = tx * 2 + ty;
-							double vx = (double) nTestX + tx - fPlayerX;
-							double vy = (double) nTestY + ty - fPlayerY;
-							double d = Math.sqrt(vx * vx + vy * vy);
-							double dot = (fEyeX * vx / d) + (fEyeY * vy / d);
-							fBoundVecX[idx] = vx;
-							fBoundVecY[idx] = vy;
-							if (Math.acos(Math.min(1.0, dot)) < 0.04 / fDistanceToWall) {
-								bBoundary = true;
-							}
-						}
-					}
+					// for (int tx = 0; tx < 2; tx++) {
+					// for (int ty = 0; ty < 2; ty++) {
+					// int idx = tx * 2 + ty;
+					// double vx = (double) nTestX + tx - fPlayerX;
+					// double vy = (double) nTestY + ty - fPlayerY;
+					// double d = Math.sqrt(vx * vx + vy * vy);
+					// double dot = (fEyeX * vx / d) + (fEyeY * vy / d);
+					// fBoundVecX[idx] = vx;
+					// fBoundVecY[idx] = vy;
+					// if (Math.acos(Math.min(1.0, dot)) < 0.04 / fDistanceToWall) {
+					// bBoundary = true;
+					// }
+					// }
+					// }
 				}
 			}
 
@@ -284,8 +284,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 			// Wall shading based on distance
 			int shadeIndex = (int) Math.min(fDistanceToWall / fDepth * 10, 9);
 			Color wallColor = wallShades[9 - shadeIndex];
-			if (bBoundary)
-				wallColor = Color.BLACK;
+			// if (bBoundary)
+			// wallColor = Color.BLACK;
 
 			for (int y = 0; y < nScreenHeight; y++) {
 				if (y <= nCeiling) {
