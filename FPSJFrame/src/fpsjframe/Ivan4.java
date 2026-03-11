@@ -2,12 +2,12 @@ import java.util.*;
 
 public class TreeAscii {
 
-	static final int W = 80, H = 40;
+	static final int W = 20, H = 10;
 	static int[][] grid = new int[H][W];
 
 	public static void main(String[] args) {
 		long seed = args.length > 0 ? Long.parseLong(args[0]) : 42;
-		growBranch(W / 2, H - 1, -Math.PI / 2, 16, 0, 5, new Random(seed));
+		growBranch(W / 2, H - 1, -Math.PI / 2, 4, 0, 5, new Random(seed));
 		print();
 	}
 
