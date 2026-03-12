@@ -71,31 +71,54 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
     private void render(){
         int W=BiomeSystem.WORLD_W, H=BiomeSystem.WORLD_H;
+        // sky
         for(int y=0;y<nScreenHeight/2;y++){float t=(float)y/(nScreenHeight/2f);int r=(int)(15+25*t),g=(int)(40+30*t),b=(int)(15+20*t);for(int x=0;x<nScreenWidth;x++)offscreen.setRGB(x,y,(r<<16)|(g<<8)|b);}
+        // floor
         for(int y=nScreenHeight/2;y<nScreenHeight;y++){float t=(float)(y-nScreenHeight/2)/(nScreenHeight/2f);int r=(int)(40+20*t),g=(int)(50+25*t),b=(int)(20+10*t);for(int x=0;x<nScreenWidth;x++)offscreen.setRGB(x,y,(r<<16)|(g<<8)|b);}
         for(int x=0;x<nScreenWidth;x++){
             double rayA=(fPlayerAngle-fFOV/2.0)+((double)x/nScreenWidth)*fFOV;
             double eyeX=Math.cos(rayA),eyeY=Math.sin(rayA);
-            double[] hD=new double[2];int[] hT=new int[2];int hC=0;double dist=0;int lC=0;
-            while(dist<fDepth&&hC<2){dist+=0.01;int tx=(int)(fPlayerX+eyeX*dist),ty=(int)(fPlayerY+eyeY*dist);if(tx<0||tx>=W||ty<0||ty>=H){hD[hC]=fDepth;hT[hC]=3;hC++;break;}int cell=getCell(tx,ty);if(cell!=0&&cell!=lC){hD[hC]=dist;hT[hC]=cell;hC++;lC=cell;if(cell!=1)break;}else if(cell==0)lC=0;}
-            int[] cA=new int[hC],fA=new int[hC];
-            for(int hi=0;hi<hC;hi++){double d=hD[hi];int c=(int)(nScreenHeight/2.0-nScreenHeight/d),f=nScreenHeight-c;if(hT[hi]==1){int wh=f-c;c=f-(int)(wh*0.4);}cA[hi]=c;fA[hi]=f;}
-            for(int hi=hC-1;hi>=0;hi--){
-                double d=hD[hi];int type=hT[hi],nc=cA[hi],nf=fA[hi];
-                int[] tex=(type==2)?texTree:(type==1)?texBush:texBrick;
-                double hx=fPlayerX+eyeX*d,hy=fPlayerY+eyeY*d;
-                int texX=(Math.abs(eyeX)>Math.abs(eyeY))?(int)((hy-Math.floor(hy))*TEX_W)&(TEX_W-1):(int)((hx-Math.floor(hx))*TEX_W)&(TEX_W-1);
-                float distB=(float)Math.max(0.05,1.0-d/fDepth);
-                double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0,ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
+            double dist=0; int lastWX=-1,lastWY=-1;
+            while(dist<fDepth){
+                dist+=0.02;
+                int wx=(int)(fPlayerX+eyeX*dist), wy=(int)(fPlayerY+eyeY*dist);
+                if(wx<0||wx>=W||wy<0||wy>=H) break;
+                if(wx==lastWX&&wy==lastWY) continue;
+                lastWX=wx; lastWY=wy;
+                BlockEnvelope block=biomes.getBlock(wx,wy);
+                if(block==null) continue;
+                // fractional hit position -> column index 0-7
+                double hx=fPlayerX+eyeX*dist, hy=fPlayerY+eyeY*dist;
+                double frac=(Math.abs(eyeX)>Math.abs(eyeY))?(hy-Math.floor(hy)):(hx-Math.floor(hx));
+                int bCol=(int)(frac*BlockEnvelope.SIZE);
+                bCol=Math.max(0,Math.min(BlockEnvelope.SIZE-1,bCol));
+                // brightness
+                float distB=(float)Math.max(0.05,1.0-dist/fDepth);
+                double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0;
+                double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
                 float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
-                for(int y=0;y<nScreenHeight;y++){
-                    if(y<=nc||y>nf)continue;
-                    boolean occ=false;for(int fhi=0;fhi<hi;fhi++)if(y>cA[fhi]&&y<=fA[fhi]){occ=true;break;}
-                    if(occ)continue;
-                    int texY=(int)(((y-nc)/(double)(nf-nc))*TEX_H)&(TEX_H-1),tc=tex[texY*TEX_W+texX];
-                    double wm=(nc+nf)/2.0,wh2=(nf-nc)/2.0+1;float vf=(float)(1.0-0.25*Math.pow(Math.abs(y-wm)/wh2,2));
-                    float fb=Math.max(0.05f,brightness*vf);
-                    offscreen.setRGB(x,y,(Math.min(255,(int)(((tc>>16)&0xFF)*fb))<<16)|(Math.min(255,(int)(((tc>>8)&0xFF)*fb))<<8)|Math.min(255,(int)((tc&0xFF)*fb)));
+                // render each solid row as a voxel slice
+                int wallH=(int)(nScreenHeight/dist);
+                for(int bRow=0;bRow<BlockEnvelope.SIZE;bRow++){
+                    if(!block.isSolid(bCol,bRow)) continue;
+                    // map bRow to screen vertical band
+                    // row 0=top of block, row SIZE-1=bottom
+                    int sliceH=wallH/BlockEnvelope.SIZE;
+                    int screenTop   =nScreenHeight/2-wallH/2 + bRow*sliceH;
+                    int screenBottom=screenTop+sliceH;
+                    // flat brown dirt colour
+                    int base=160-(bRow*10); // slightly darker lower rows
+                    int r=(int)(base*brightness);
+                    int g=(int)((base*0.6)*brightness);
+                    int b=(int)((base*0.3)*brightness);
+                    r=Math.min(255,Math.max(0,r));
+                    g=Math.min(255,Math.max(0,g));
+                    b=Math.min(255,Math.max(0,b));
+                    int col=(r<<16)|(g<<8)|b;
+                    for(int sy=screenTop;sy<screenBottom;sy++){
+                        if(sy<0||sy>=nScreenHeight) continue;
+                        offscreen.setRGB(x,sy,col);
+                    }
                 }
             }
         }

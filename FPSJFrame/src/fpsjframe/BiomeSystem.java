@@ -12,6 +12,9 @@ public class BiomeSystem {
     public final Envelope.WorldEnvelope worldMap;
     public final Envelope.ChunkEnvelope chunkFlat, chunkBush, chunkTree, chunkTest;
 
+    // ── BLOCK REGISTRY ────────────────────────────────────────────
+    public final BlockEnvelope bushBlock, treeBlock;
+
     public BiomeSystem(String mapsDir) {
         try {
             worldMap  = (Envelope.WorldEnvelope) Envelope.load(mapsDir + "/worldMap.envelope");
@@ -23,9 +26,15 @@ public class BiomeSystem {
         }
 
         // chunkTest: dynamic — generated from TreeAscii, not a file
-        // air='0'->0=dirt, tree='1'->1=bush
         TreeAscii ta = new TreeAscii(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, '0', '1');
         chunkTest = new Envelope.ChunkEnvelope("chunkTest", ta.grid, (int)'0', "dirt", (int)'1', "bush");
+
+        // blocks — load from file if present, else use hardcoded defaults
+        BlockEnvelope bb = BlockEnvelope.makeBush(), tb = BlockEnvelope.makeTree();
+        try { bb = BlockEnvelope.load(mapsDir + "/bushBlock.envelope"); } catch (IOException ignored) {}
+        try { tb = BlockEnvelope.load(mapsDir + "/treeBlock.envelope"); } catch (IOException ignored) {}
+        bushBlock = bb;
+        treeBlock = tb;
     }
 
     public Envelope getChunk(int worldCol, int worldRow) {
@@ -38,7 +47,7 @@ public class BiomeSystem {
     }
 
     public String getEntity(int wx, int wy) {
-        if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return "tree";
+        if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return "treeBlock";
         return getChunk(wx / CHUNK_SIZE, wy / CHUNK_SIZE).readAt(wx % CHUNK_SIZE, wy % CHUNK_SIZE);
     }
 
@@ -50,15 +59,24 @@ public class BiomeSystem {
     public int getCell(int wx, int wy) {
         if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return 2;
         switch (getEntity(wx, wy)) {
-            case "bush": return 1;
-            case "tree": return 2;
-            default:     return 0; // dirt or unknown = open
+            case "bush": case "bushBlock": return 1;
+            case "tree": case "treeBlock": return 2;
+            default: return 0;
+        }
+    }
+
+    /** Returns the BlockEnvelope for a block entity at world position, or null if not a block. */
+    public BlockEnvelope getBlock(int wx, int wy) {
+        switch (getEntity(wx, wy)) {
+            case "bushBlock": return bushBlock;
+            case "treeBlock": return treeBlock;
+            default:          return null;
         }
     }
 
     public boolean isSolid(double wx, double wy) {
         String e = getEntity((int) wx, (int) wy);
-        return e.equals("bush") || e.equals("tree");
+        return e.equals("bush") || e.equals("tree") || e.equals("bushBlock") || e.equals("treeBlock");
     }
 
     public String getBiomeName(int col, int row) {
