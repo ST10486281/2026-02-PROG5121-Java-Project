@@ -160,12 +160,12 @@ public class LSystem {
                     }
                     t.x=nx; t.y=ny; t.z=nz; break;
                 }
-                case '+': rotFrame(t, t.lx,t.ly,t.lz,  r); break;
-                case '-': rotFrame(t, t.lx,t.ly,t.lz, -r); break;
-                case '<': rotFrame(t, t.ux,t.uy,t.uz,  r); break;
-                case '>': rotFrame(t, t.ux,t.uy,t.uz, -r); break;
-                case '^': rotFrame(t, t.hx,t.hy,t.hz,  r); break;
-                case '&': rotFrame(t, t.hx,t.hy,t.hz, -r); break;
+                case '+': rotFrame(t, t.ux,t.uy,t.uz,  r); break; // yaw left  (around Up)
+                case '-': rotFrame(t, t.ux,t.uy,t.uz, -r); break; // yaw right
+                case '^': rotFrame(t, t.lx,t.ly,t.lz,  r); break; // pitch up  (around Left)
+                case '&': rotFrame(t, t.lx,t.ly,t.lz, -r); break; // pitch down
+                case '/': rotFrame(t, t.hx,t.hy,t.hz,  r); break; // roll CCW  (around Heading)
+                case '\\':rotFrame(t, t.hx,t.hy,t.hz, -r); break; // roll CW
                 case '1': break; // world-Y yaw 0°
                 case '2': rotFrame(t,WORLD_Y[0],WORLD_Y[1],WORLD_Y[2],  Math.PI/2); break;
                 case '3': rotFrame(t,WORLD_Y[0],WORLD_Y[1],WORLD_Y[2],  Math.PI);   break;

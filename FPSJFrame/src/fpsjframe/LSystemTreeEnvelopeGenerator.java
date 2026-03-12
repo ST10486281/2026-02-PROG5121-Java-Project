@@ -1,18 +1,15 @@
 package fpsjframe;
 
 /**
- * Stem → 3 branches at 120° yaw, each pitching outward from trunk → each splits same way
+ * Classic 3D L-system tree:
+ *   axiom: FFFFFFA
+ *   A = [&FFFA]////[&FFFA]////[&FFFA]
  *
- * Key fix: yaw FIRST with world-Y presets (1/2/3 = 0/120/240°), THEN pitch outward (+)
- * This ensures each branch leans away from trunk in its own compass direction,
- * not all leaning the same world-space way.
+ * & = pitch down (branch angles away from vertical)
+ * / = roll CCW around heading — 4 rolls × 30° = 120° between each branch
+ * → 3 branches spread evenly 120° apart around the trunk in true 3D
  *
- * Rule A: 3-way split using world-Y yaw symbols then pitch up-and-out
- *   [1+FFFA]  = face 0°,   lean out 25°, grow FFF, recurse
- *   [2+FFFA]  = face 120°, lean out 25°, grow FFF, recurse
- *   [3+FFFA]  = face 240°, lean out 25°, grow FFF, recurse
- *
- * iterations=2 → self-similar: each branch tip splits into 3 the same way
+ * iterations=2: each branch tip A expands the same way → self-similar
  */
 public class LSystemTreeEnvelopeGenerator {
 
@@ -20,10 +17,10 @@ public class LSystemTreeEnvelopeGenerator {
         return LSystem.generate(
             new LSystem.Params()
                 .axiom("FFFFFFA")
-                .rule('A', "[1+FFFA][2+FFFA][3+FFFA]")
+                .rule('A', "[&FFFA]////[&FFFA]////[&FFFA]")
                 .iterations(2)
-                .branchAngle(28)
-                .widthRatio(0.75)
+                .branchAngle(30)   // / rolls 30° each → 4×30° = 120° between branches
+                .widthRatio(0.85)
                 .trunkThickness(0)
                 .objectName("objectTree")
                 .solidLabel("tree"),
