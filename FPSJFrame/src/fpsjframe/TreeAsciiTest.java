@@ -3,7 +3,7 @@ package fpsjframe;
 public class TreeAsciiTest {
 
     public static void main(String[] args) {
-        int canvasW = 10, canvasH = 10, treeW = 10, treeH = 10;
+        int canvasW = 20, canvasH = 20, treeW = 20, treeH = 20;
         // if (args.length >= 2) { canvasW = Integer.parseInt(args[0]); canvasH = Integer.parseInt(args[1]); }
         // if (args.length >= 4) { treeW   = Integer.parseInt(args[2]); treeH   = Integer.parseInt(args[3]); }
 
