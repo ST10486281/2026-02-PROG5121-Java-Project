@@ -1,6 +1,6 @@
 import java.util.*;
 
-public class TreeAscii {
+public class TestTree {
 
 	static final int W = 20, H = 10;
 	static int[][] grid = new int[H][W];
