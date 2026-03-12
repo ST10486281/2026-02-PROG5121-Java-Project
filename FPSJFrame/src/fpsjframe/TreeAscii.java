@@ -1,5 +1,7 @@
 package fpsjframe;
 
+import java.util.Random;
+
 public class TreeAscii {
 
     public final int W, H;
@@ -9,10 +11,11 @@ public class TreeAscii {
         this.W = w;
         this.H = h;
         this.grid = new int[h][w];
-        growBranch(w / 2.0, h - 1, -Math.PI / 2, h * 0.4, 0, 5);
+        growBranch(w / 2.0, h - 1, -Math.PI / 2, h * 0.4, 0, 5, new Random(42));
     }
 
-    private void growBranch(double ox, double oy, double angle, double length, int depth, int maxDepth) {
+    private void growBranch(double ox, double oy, double angle, double length,
+            int depth, int maxDepth, Random rng) {
         if (depth > maxDepth || length < 1.0) return;
         double dx = Math.cos(angle), dy = Math.sin(angle);
         double step = 0.5, traveled = 0;
@@ -24,12 +27,13 @@ public class TreeAscii {
             traveled += step;
         }
         double ex = ox + dx * length, ey = oy + dy * length;
-        double childLen = length * 0.65;
-        double spread   = Math.PI / 4.5;
-        growBranch(ex, ey, angle - spread, childLen, depth + 1, maxDepth);
-        growBranch(ex, ey, angle + spread, childLen, depth + 1, maxDepth);
-        if (depth < 3)
-            growBranch(ex, ey, angle, childLen * 0.75, depth + 1, maxDepth);
+        double childLen = length * (0.60 + rng.nextDouble() * 0.15);
+        double spread   = Math.PI / 5.0 + rng.nextDouble() * Math.PI / 8.0;
+        double wobble   = (rng.nextDouble() - 0.5) * 0.2;
+        growBranch(ex, ey, angle - spread + wobble, childLen, depth + 1, maxDepth, new Random(rng.nextLong()));
+        growBranch(ex, ey, angle + spread + wobble, childLen, depth + 1, maxDepth, new Random(rng.nextLong()));
+        if (depth < 3 && rng.nextDouble() < 0.5)
+            growBranch(ex, ey, angle + wobble * 0.3, childLen * 0.75, depth + 1, maxDepth, new Random(rng.nextLong()));
     }
 
     public int get(int x, int y) {
