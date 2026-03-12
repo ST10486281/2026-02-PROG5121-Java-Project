@@ -78,8 +78,10 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         for(int x=0;x<nScreenWidth;x++){
             double rayA=(fPlayerAngle-fFOV/2.0)+((double)x/nScreenWidth)*fFOV;
             double eyeX=Math.cos(rayA),eyeY=Math.sin(rayA);
-            double dist=0; int lastWX=-1,lastWY=-1;
-            while(dist<fDepth){
+            double dist=0;
+            int lastWX=-1, lastWY=-1;
+            boolean hitSolid=false;
+            while(dist<fDepth && !hitSolid){
                 dist+=0.02;
                 int wx=(int)(fPlayerX+eyeX*dist), wy=(int)(fPlayerY+eyeY*dist);
                 if(wx<0||wx>=W||wy<0||wy>=H) break;
@@ -87,38 +89,51 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 lastWX=wx; lastWY=wy;
                 BlockEnvelope block=biomes.getBlock(wx,wy);
                 if(block==null) continue;
-                // fractional hit position -> column index 0-7
-                double hx=fPlayerX+eyeX*dist, hy=fPlayerY+eyeY*dist;
-                double frac=(Math.abs(eyeX)>Math.abs(eyeY))?(hy-Math.floor(hy)):(hx-Math.floor(hx));
+
+                // ── find exact entry distance into this tile ────────
+                double entryDist=dist-0.02;
+                double tileX=wx, tileY=wy;
+                // refine entry point
+                double sd=entryDist;
+                while(sd<dist){ double tx2=fPlayerX+eyeX*sd,ty2=fPlayerY+eyeY*sd; if((int)tx2==wx&&(int)ty2==wy) break; sd+=0.002; }
+
+                // bCol = left-right slice from fractional floor position
+                double hx2=fPlayerX+eyeX*sd, hy2=fPlayerY+eyeY*sd;
+                double frac=(Math.abs(eyeX)>Math.abs(eyeY))?(hy2-Math.floor(hy2)):(hx2-Math.floor(hx2));
                 int bCol=(int)(frac*BlockEnvelope.SIZE);
                 bCol=Math.max(0,Math.min(BlockEnvelope.SIZE-1,bCol));
-                // brightness
-                float distB=(float)Math.max(0.05,1.0-dist/fDepth);
+
+                // wallH and blockTop for this tile at distance sd
+                int wallH=Math.max(1,(int)(nScreenHeight/sd));
+                int sliceH=Math.max(1,wallH/BlockEnvelope.SIZE);
+                int blockTop=nScreenHeight/2-wallH/2;
+
+                float distB=(float)Math.max(0.05,1.0-sd/fDepth);
                 double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0;
                 double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
                 float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
-                // render each solid row as a voxel slice
-                // wallH = total height if block filled all 8 rows
-                int wallH=(int)(nScreenHeight/dist);
-                int sliceH=Math.max(1, wallH/BlockEnvelope.SIZE);
-                int blockTop=nScreenHeight/2 - wallH/2;
-                for(int bRow=0;bRow<BlockEnvelope.SIZE;bRow++){
+
+                // ── scan screen column top-to-bottom ────────────────
+                // for each screen pixel in the block's vertical span,
+                // map it to bRow and check solidity
+                for(int sy=0;sy<nScreenHeight;sy++){
+                    // which bRow does this screen pixel correspond to?
+                    int bRow=(sy-blockTop)/sliceH;
+                    if(bRow<0||bRow>=BlockEnvelope.SIZE) continue;
                     if(!block.isSolid(bCol,bRow)) continue;
-                    int screenTop   =blockTop + bRow*sliceH;
-                    int screenBottom=screenTop + sliceH;
-                    // flat brown dirt colour, slightly darker lower rows
+                    // first solid row hit — draw the full slice and stop
+                    hitSolid=true;
+                    int screenTop   =blockTop+bRow*sliceH;
+                    int screenBottom=screenTop+sliceH;
                     int base=160-(bRow*8);
                     int r=(int)(base*brightness);
                     int g=(int)((base*0.55)*brightness);
                     int b=(int)((base*0.25)*brightness);
-                    r=Math.min(255,Math.max(0,r));
-                    g=Math.min(255,Math.max(0,g));
-                    b=Math.min(255,Math.max(0,b));
+                    r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
                     int col=(r<<16)|(g<<8)|b;
-                    for(int sy=screenTop;sy<screenBottom;sy++){
-                        if(sy<0||sy>=nScreenHeight) continue;
-                        offscreen.setRGB(x,sy,col);
-                    }
+                    for(int py=screenTop;py<screenBottom;py++)
+                        if(py>=0&&py<nScreenHeight) offscreen.setRGB(x,py,col);
+                    break;
                 }
             }
         }
