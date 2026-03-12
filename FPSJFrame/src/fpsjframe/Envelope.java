@@ -94,13 +94,13 @@ public abstract class Envelope {
                     if (line.startsWith("legend:")) {
                         for (String token : line.substring(7).trim().split("\\s+")) {
                             String[] kv = token.split("=");
-                            legend.put(Integer.parseInt(kv[0]), kv[1]);
+                            legend.put((int) kv[0].charAt(0), kv[1]);
                         }
                     }
                 } else {
                     int[] row = new int[line.length()];
                     for (int i = 0; i < line.length(); i++)
-                        row[i] = line.charAt(i) - '0';
+                        row[i] = (int) line.charAt(i);
                     gridRows.add(row);
                 }
             }

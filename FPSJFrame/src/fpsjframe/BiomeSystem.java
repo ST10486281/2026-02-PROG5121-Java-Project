@@ -25,7 +25,7 @@ public class BiomeSystem {
         // chunkTest: dynamic — generated from TreeAscii, not a file
         // air='0'->0=dirt, tree='1'->1=bush
         TreeAscii ta = new TreeAscii(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, '0', '1');
-        chunkTest = new Envelope.ChunkEnvelope("chunkTest", ta.grid, 0, "dirt", 1, "bush");
+        chunkTest = new Envelope.ChunkEnvelope("chunkTest", ta.grid, (int)'0', "dirt", (int)'1', "bush");
     }
 
     public Envelope getChunk(int worldCol, int worldRow) {
