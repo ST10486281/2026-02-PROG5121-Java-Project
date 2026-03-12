@@ -41,7 +41,7 @@ public class HUD {
      */
     private void drawProximityDarkness(Graphics2D g2, double px, double pz, int sw, int sh) {
         int    numRays  = 8;
-        double maxCheck = 6.0;
+        double maxCheck = 2.0;
         double nearest  = maxCheck;
         int    ey       = WorldBuilder.OBJ_SIZE / 2;
 
