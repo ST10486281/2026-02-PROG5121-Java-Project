@@ -289,10 +289,15 @@ public class WorldBuilder {
         // If the envelope is smaller than OBJ_SIZE, offset so it's centred.
         int offX = (OBJ_SIZE - obj.envX) / 2;
         int offZ = (OBJ_SIZE - obj.envZ) / 2;
-        // Y: envelope rows were stored with row0=top mapped to y=(OBJ_SIZE-1).
-        // The actual voxels occupy the top envY slots of the array.
-        // We shift them down so they start at y=0 (floor of slot).
-        int offY = -(OBJ_SIZE - obj.envY);  // shift down to sit on ground
+        // Y: find the lowest solid voxel in the array and shift it to y=0.
+        // This ensures the object always sits on the ground regardless of
+        // how the envelope rows were mapped into the array.
+        int minSolidY = OBJ_SIZE;
+        for (int x = 0; x < OBJ_SIZE; x++)
+            for (int y = 0; y < OBJ_SIZE; y++)
+                for (int z = 0; z < OBJ_SIZE; z++)
+                    if (obj.voxels[x][y][z] && y < minSolidY) minSolidY = y;
+        int offY = (minSolidY == OBJ_SIZE) ? 0 : -minSolidY;  // shift lowest solid voxel to y=0
 
         for (int x = 0; x < OBJ_SIZE; x++) {
             for (int y = 0; y < OBJ_SIZE; y++) {
@@ -314,20 +319,10 @@ public class WorldBuilder {
     /** Choose a display colour based on object type and local voxel position. */
     private static Color pickColor(String objName, int x, int y, int z) {
         switch (objName) {
-            case "objectDirt":
-                return COL_DIRT;
-
-            case "objectBush":
-                // bottom two rows are the thin stem; above is the leafy body
-                return (y <= (OBJ_SIZE / 8)) ? COL_BUSH_STEM : COL_BUSH_BODY;
-
-            case "objectTree":
-                // central 2×2 columns at lower half = trunk; rest = canopy
-                boolean isTrunk = (x >= OBJ_SIZE*3/8 && x <= OBJ_SIZE*4/8 && z >= OBJ_SIZE*3/8 && z <= OBJ_SIZE*4/8 && y < OBJ_SIZE*5/8);
-                return isTrunk ? COL_TREE_TRUNK : COL_TREE_LEAF;
-
-            default:
-                return COL_DEFAULT;
+            case "objectDirt":  return COL_DIRT;
+            case "objectBush":  return COL_BUSH_BODY;
+            case "objectTree":  return COL_TREE_LEAF;
+            default:            return COL_DEFAULT;
         }
     }
 
