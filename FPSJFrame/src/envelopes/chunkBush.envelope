@@ -2,8 +2,8 @@ name: chunkBush
 type: chunk
 legend: 0=objectDirt 1=objectBush
 ---
-00100
+10101
 01010
-00000
-00010
-10000
+10101
+01010
+10101
