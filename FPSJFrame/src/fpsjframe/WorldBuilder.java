@@ -101,11 +101,17 @@ public class WorldBuilder {
         // objectShapes.put("objectTree", parseObject(treeLines));
 
 
-        String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 4);
+        // String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 4);
+        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
+        // objectShapes.put("objectTree", parseObject(treeLines));
+
+  // ── Inject procedurally generated objectTree (L-System) ──────────────
+        String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 3);
         List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         objectShapes.put("objectTree", parseObject(treeLines));
+ 
 
-        
+
 
  
         // ── Inject procedurally generated objectBush (L-System) ──────────────
