@@ -132,7 +132,7 @@ public class WorldBuilder {
                         ObjectShape obj = objectShapes.get(chunk.objects[objCol][objRow]);
                         if (obj == null) continue;
 
-                        int ox = chunkOriginX + objCol * OBJ_SIZE;
+                        int ox = chunkOriginX + (chunk.cols - 1 - objCol) * OBJ_SIZE;
                         int oz = chunkOriginZ + objRow * OBJ_SIZE;
                         stampObject(obj, ox, oz);
                     }
