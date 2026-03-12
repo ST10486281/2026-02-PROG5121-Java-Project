@@ -1,6 +1,6 @@
 name: chunkFlat
 type: chunk
-legend: 0=dirt 1=bush 2=tree
+legend: 0=objectDirt
 ---
 0000000000
 0000000000

@@ -1,6 +1,6 @@
 name: chunkTree
 type: chunk
-legend: 0=air t=treeBlock
+legend: 0=objectDirt t=objectTree
 ---
 0t000
 00000

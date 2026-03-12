@@ -1,6 +1,6 @@
 name: chunkBush
 type: chunk
-legend: 0=air b=bushBlock
+legend: 0=objectDirt b=objectBush
 ---
 00000
 0b000
