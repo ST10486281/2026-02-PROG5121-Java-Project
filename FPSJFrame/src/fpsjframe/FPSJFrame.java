@@ -34,7 +34,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     static final double TURN_SPEED   = 0.04;
     static final double STRAFE_SPEED = 0.28;
     static final double EYE_HEIGHT   = 10;     // cells above y = 0
-    static final double CELL_SCALE_H = 30.0;   // height  – how tall cells appear on screen
+    static final double CELL_SCALE_H = 27.0;   // height  – how tall cells appear on screen
     static final double CELL_SCALE_W = 1.0;    // width   – horizontal stretch (>1 = wider, <1 = narrower)
     static final double CELL_SCALE_B = 1.0;    // breadth – depth compression  (>1 = closer, <1 = farther)
 
