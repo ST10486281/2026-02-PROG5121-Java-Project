@@ -3,19 +3,18 @@ package fpsjframe;
 public class TreeAsciiTest {
 
     public static void main(String[] args) {
-        int canvasW = 40, canvasH = 20, treeW = 20, treeH = 10;
-        if (args.length >= 2) { canvasW = Integer.parseInt(args[0]); canvasH = Integer.parseInt(args[1]); }
-        if (args.length >= 4) { treeW   = Integer.parseInt(args[2]); treeH   = Integer.parseInt(args[3]); }
-        print(new TreeAscii(canvasW, canvasH, treeW, treeH));
+        int canvasW = 10, canvasH = 10, treeW = 10, treeH = 10;
+        // if (args.length >= 2) { canvasW = Integer.parseInt(args[0]); canvasH = Integer.parseInt(args[1]); }
+        // if (args.length >= 4) { treeW   = Integer.parseInt(args[2]); treeH   = Integer.parseInt(args[3]); }
+
+      
+        print(new TreeAscii(canvasW, canvasH, treeW, treeH, '░', '█'));
     }
 
     static void print(TreeAscii tree) {
-        System.out.println("TreeAscii [canvas " + tree.W + "x" + tree.H + "]");
-        for (int y = 0; y < tree.H; y++) {
-            StringBuilder sb = new StringBuilder();
-            for (int x = 0; x < tree.W; x++)
-                sb.append(tree.isTree(x, y) ? "#" : " ");
-            System.out.println(sb);
-        }
+        for (int y = 0; y < tree.H; y++)
+            System.out.println(new String(tree.grid[y]));
+        System.out.println();
     }
+    // ██▓▒░
 }
