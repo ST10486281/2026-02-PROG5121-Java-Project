@@ -147,6 +147,21 @@ public class BiomeSystem {
         return !e.equals("air");
     }
 
+    /** 3-axis solid check used by the voxel raycaster. */
+    public boolean isSolidXYZ(int wx, int y, int wz) {
+        BlockEnvelope block = getBlock(wx, wz);
+        if (block == null) return false;
+        int[] origin = getCellBlockOrigin(wx, wz);
+        if (origin[0] < 0) return false;
+        int cx = wx - origin[0];
+        int cz = wz - origin[1];
+        cx = Math.max(0, Math.min(CELLS_PER_BLOCK - 1, cx));
+        cz = Math.max(0, Math.min(CELLS_PER_BLOCK - 1, cz));
+        for (int depth = 0; depth < CELLS_PER_BLOCK; depth++)
+            if (block.isSolid(cx, y, depth)) return true;
+        return false;
+    }
+
     public String getBiomeName(int col, int row) {
         return worldMap.readAt(col, row);
     }
