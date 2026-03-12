@@ -95,8 +95,13 @@ public class WorldBuilder {
         // String treeEnvelope = SphereEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
         // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         // objectShapes.put("objectTree", parseObject(treeLines));
+
+        // String treeEnvelope = HeartEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
+        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
+        // objectShapes.put("objectTree", parseObject(treeLines));
+
         
-        String treeEnvelope = HeartEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
+        String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 4);
         List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         objectShapes.put("objectTree", parseObject(treeLines));
 
