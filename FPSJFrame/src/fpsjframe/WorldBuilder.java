@@ -43,6 +43,7 @@ public class WorldBuilder {
     private static final Color COL_BUSH_STEM  = new Color( 90,  70,  30);
     private static final Color COL_TREE_LEAF  = new Color( 34,  90,  30);
     private static final Color COL_TREE_TRUNK = new Color( 90,  60,  30);
+    private static final Color COL_COW        = new Color(220, 210, 195);
     private static final Color COL_DEFAULT    = new Color(160, 160, 160);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -86,38 +87,20 @@ public class WorldBuilder {
             }
         }
 
-        // ── Inject procedurally generated objectTree ─────────────────────────
-
-        // String treeEnvelope = TreeEnvelopeGenerator.generate(42, 20, 20, 20, 20, 'O', '#');
-        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
-        // objectShapes.put("objectTree", parseObject(treeLines));
-
-        // String treeEnvelope = SphereEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
-        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
-        // objectShapes.put("objectTree", parseObject(treeLines));
-
-        // String treeEnvelope = HeartEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
-        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
-        // objectShapes.put("objectTree", parseObject(treeLines));
-
-
-        // String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 4);
-        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
-        // objectShapes.put("objectTree", parseObject(treeLines));
-
-  // ── Inject procedurally generated objectTree (L-System) ──────────────
+        // ── Inject procedurally generated objectTree (L-System) ──────────────
         String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 3);
         List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         objectShapes.put("objectTree", parseObject(treeLines));
- 
 
-
-
- 
         // ── Inject procedurally generated objectBush (L-System) ──────────────
         String bushEnvelope = LSystemBushEnvelopeGenerator.generate(20, 2);
         List<String> bushLines = Arrays.asList(bushEnvelope.split("\\n"));
         objectShapes.put("objectBush", parseObject(bushLines));
+
+        // ── Inject procedurally generated objectCow (parametric body) ────────
+        String cowEnvelope = CowEnvelopeGenerator.generate();
+        List<String> cowLines = Arrays.asList(cowEnvelope.split("\n"));
+        objectShapes.put("objectCow", parseObject(cowLines));
 
         if (worldNames == null)
             throw new IOException("No world envelope found.");
@@ -234,6 +217,13 @@ public class WorldBuilder {
      *   Each row has 8 chars       → char index = Z axis (0 = front)
      *   '#' (or any non-air legend value) = solid
      */
+    /** Test-only entry point — parses an envelope string through the real parser. */
+    static boolean[][][] parseObjectForTest(String envelopeText) {
+        List<String> lines = Arrays.asList(envelopeText.split("\n"));
+        ObjectShape shape = parseObject(lines);
+        return shape.voxels;
+    }
+
     private static ObjectShape parseObject(List<String> lines) {
         String name = header(lines, "name");
         Map<Character, String> legend = parseLegend(header(lines, "legend"));
@@ -357,6 +347,7 @@ public class WorldBuilder {
             case "objectDirt":  return COL_DIRT;
             case "objectBush":  return COL_BUSH_BODY;
             case "objectTree":  return COL_TREE_LEAF;
+            case "objectCow":   return COL_COW;
             default:            return COL_DEFAULT;
         }
     }
