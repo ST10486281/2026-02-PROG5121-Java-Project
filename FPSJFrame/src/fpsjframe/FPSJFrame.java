@@ -89,7 +89,10 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         pixels      = ((java.awt.image.DataBufferInt) frameBuffer.getRaster().getDataBuffer()).getData();
 
         // Load world from envelope files (same directory as the .class files, or adjust path)
-        String envelopeDir = System.getProperty("envelopes", ".");
+        // Envelopes live in src/envelopes/. Since the game is run from src/,
+        // the folder is simply "envelopes" relative to the working directory.
+        // Override with:  java -Denvelopes=<path> fpsjframe.FPSJFrame
+        String envelopeDir = System.getProperty("envelopes", "envelopes");
         try {
             world = new WorldBuilder(envelopeDir);
         } catch (Exception e) {
@@ -183,12 +186,12 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
         for (int col = 0; col < SW; col++) {
 
-            // Ray angle for this screen column
+            // Ray direction for this screen column
             double rayAngle = angle - FOV / 2.0 + (FOV * col) / SW;
             double rdx = Math.sin(rayAngle);
             double rdz = Math.cos(rayAngle);
 
-            // DDA setup
+            // DDA setup -- steps one CELL at a time on the X/Z ground plane
             double posX = px;
             double posZ = pz;
 
@@ -206,14 +209,14 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             if (rdz < 0) { stepZ = -1; sideDistZ = (posZ - mapZ) * deltaDistZ; }
             else          { stepZ =  1; sideDistZ = (mapZ + 1.0 - posZ) * deltaDistZ; }
 
-            // Walk the ray through the voxel column heights
-            boolean hit     = false;
-            boolean sideHit = false;  // true = X-side wall, false = Z-side wall
-            Color   hitColor = Color.GRAY;
-            double  perpDist = 1.0;
+            // Track painted rows so nearer cells always win over farther ones
+            boolean[] rowPainted = new boolean[SH];
 
             int maxSteps = world.worldCellsX + world.worldCellsZ;
-            for (int step = 0; step < maxSteps && !hit; step++) {
+
+            for (int step = 0; step < maxSteps; step++) {
+
+                boolean sideHit;
                 if (sideDistX < sideDistZ) {
                     sideDistX += deltaDistX;
                     mapX      += stepX;
@@ -224,55 +227,63 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                     sideHit    = false;
                 }
 
-                // Check every height layer at this (mapX, mapZ) column
-                for (int y = WorldBuilder.WORLD_HEIGHT - 1; y >= 0; y--) {
-                    if (world.isSolid(mapX, y, mapZ)) {
-                        hit      = true;
-                        hitColor = world.getColor(mapX, y, mapZ);
+                // Perpendicular distance to this cell column (corrects fish-eye)
+                double perpDist = sideHit
+                    ? (mapX - posX + (1 - stepX) / 2.0) / rdx
+                    : (mapZ - posZ + (1 - stepZ) / 2.0) / rdz;
+                if (perpDist <= 0) perpDist = 0.001;
 
-                        // Perpendicular distance (corrects fish-eye)
-                        perpDist = sideHit
-                            ? (mapX - posX + (1 - stepX) / 2.0) / rdx
-                            : (mapZ - posZ + (1 - stepZ) / 2.0) / rdz;
+                // How many pixels tall is one cell at this distance?
+                double cellScreenH = (double) SH / (WorldBuilder.WORLD_HEIGHT * perpDist);
 
-                        // Draw the wall column
-                        drawWallColumn(col, perpDist, y, hitColor, sideHit);
-                        break;
+                // Screen Y of the bottom of y=0 (ground level).
+                // Horizon is at SH/2; eye is EYE_HEIGHT cells above ground.
+                double groundScreenY = SH / 2.0 + EYE_HEIGHT * cellScreenH;
+
+                // Shade + fog factors shared across all y-layers in this column
+                float shade = sideHit ? 0.65f : 1.0f;
+                float fog   = (float) Math.max(0.1, 1.0 - perpDist / 80.0);
+
+                // Paint every solid y-layer individually.
+                // Air gaps (e.g. between trunk and canopy) stay transparent.
+                boolean anyHit = false;
+                for (int y = 0; y < WorldBuilder.WORLD_HEIGHT; y++) {
+                    if (!world.isSolid(mapX, y, mapZ)) continue;
+                    anyHit = true;
+
+                    // Screen rows for this cell layer (y=0 on ground, y=7 at top)
+                    int scrY0 = Math.max(0,       (int)(groundScreenY - (y + 1) * cellScreenH));
+                    int scrY1 = Math.min(SH - 1,  (int)(groundScreenY - y       * cellScreenH));
+
+                    Color c  = world.getColor(mapX, y, mapZ);
+                    float r  = (c.getRed()   / 255f) * shade * fog;
+                    float g  = (c.getGreen() / 255f) * shade * fog;
+                    float b  = (c.getBlue()  / 255f) * shade * fog;
+                    int   rgb = toRGB(r, g, b);
+
+                    for (int sy = scrY0; sy <= scrY1; sy++) {
+                        if (!rowPainted[sy]) {
+                            pixels[sy * SW + col] = rgb;
+                            rowPainted[sy] = true;
+                        }
                     }
+                }
+
+                // Early-out: if this column was fully solid and filled every
+                // visible screen row, nothing behind it can be seen.
+                if (anyHit) {
+                    int topRow = Math.max(0,      (int)(groundScreenY - WorldBuilder.WORLD_HEIGHT * cellScreenH));
+                    int botRow = Math.min(SH - 1, (int) groundScreenY);
+                    boolean allPainted = true;
+                    for (int sy = topRow; sy <= botRow; sy++) {
+                        if (!rowPainted[sy]) { allPainted = false; break; }
+                    }
+                    if (allPainted) break;
                 }
             }
         }
     }
 
-    /** Draw one vertical wall strip at screen column `col`. */
-    void drawWallColumn(int col, double perpDist, int cellY, Color baseColor, boolean xSide) {
-        if (perpDist <= 0) perpDist = 0.001;
-
-        // Wall height on screen scales inversely with distance
-        // cellY contributes vertical offset (higher cells appear higher on screen)
-        double wallHeight = SH / perpDist;
-
-        // Vertical screen bounds for this cell layer
-        int drawStart = (int)(SH / 2.0 - wallHeight / 2.0
-                             + (WorldBuilder.WORLD_HEIGHT / 2.0 - cellY) * wallHeight / WorldBuilder.WORLD_HEIGHT);
-        int drawEnd   = drawStart + (int)(wallHeight / WorldBuilder.WORLD_HEIGHT);
-
-        // Shade: darken X-side walls to give depth cue
-        float shade = xSide ? 0.65f : 1.0f;
-        // Distance fog
-        float fog   = (float) Math.max(0.1, 1.0 - perpDist / 60.0);
-        float r     = (baseColor.getRed()   / 255f) * shade * fog;
-        float g     = (baseColor.getGreen() / 255f) * shade * fog;
-        float b     = (baseColor.getBlue()  / 255f) * shade * fog;
-
-        int rgb = toRGB(r, g, b);
-
-        int yStart = Math.max(0, drawStart);
-        int yEnd   = Math.min(SH - 1, drawEnd);
-        for (int y = yStart; y <= yEnd; y++) {
-            pixels[y * SW + col] = rgb;
-        }
-    }
 
     /** Draw sky gradient and floor gradient into the pixel buffer. */
     void drawBackground() {
