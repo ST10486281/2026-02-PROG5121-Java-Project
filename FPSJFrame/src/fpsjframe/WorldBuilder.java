@@ -87,10 +87,16 @@ public class WorldBuilder {
         }
 
         // ── Inject procedurally generated objectTree ─────────────────────────
+
         // String treeEnvelope = TreeEnvelopeGenerator.generate(42, 20, 20, 20, 20, 'O', '#');
         // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         // objectShapes.put("objectTree", parseObject(treeLines));
-        String treeEnvelope = SphereEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
+
+        // String treeEnvelope = SphereEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
+        // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
+        // objectShapes.put("objectTree", parseObject(treeLines));
+        
+        String treeEnvelope = HeartEnvelopeGenerator.generate(20, 20, 20, 20, 'O', '#');
         List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         objectShapes.put("objectTree", parseObject(treeLines));
 
