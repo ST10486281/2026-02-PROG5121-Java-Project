@@ -13,7 +13,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     private boolean[] keys = new boolean[256];
 
     // ── BIOME SYSTEM ──────────────────────────────────────────────
-    private BiomeSystem biomes = new BiomeSystem();
+    private BiomeSystem biomes = new BiomeSystem("maps");
     private int getCell(int wx, int wy)        { return biomes.getCell(wx, wy); }
     private boolean isSolid(double wx, double wy) { return biomes.isSolid(wx, wy); }
 

@@ -1,14 +1,17 @@
 package fpsjframe;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.io.*;
+import java.util.*;
 
 /**
  * Envelope — a self-describing grid of digits.
  *
- * cover:    name + legend mapping digits → entity names
- * contents: the raw 2D digit grid
+ * File format (.envelope):
+ *   name: <name>
+ *   type: world | chunk
+ *   legend: 0=entity 1=entity ...
+ *   ---
+ *   <grid rows, one per line, digits only>
  *
  * Two subtypes enforce which entities are valid:
  *   WorldEnvelope — only biome entities (flatland, bushland, treeland)
@@ -38,47 +41,94 @@ public abstract class Envelope {
             String entity = (String)  legendEntries[i + 1];
             if (!allowedEntities.contains(entity))
                 throw new IllegalArgumentException(
-                    "Envelope \"" + name + "\": entity \"" + entity + "\" is not valid for this envelope type. " +
-                    "Allowed: " + allowedEntities
+                    "Envelope \"" + name + "\": entity \"" + entity + "\" not valid. Allowed: " + allowedEntities
                 );
             legend.put(digit, entity);
         }
     }
 
-    /** What entity does this digit represent? */
-    public String read(int digit) {
-        return legend.getOrDefault(digit, "unknown");
+    // constructor used by loader (legend already parsed)
+    protected Envelope(String name, int[][] contents, Set<String> allowedEntities, Map<Integer,String> parsedLegend) {
+        this.name     = name;
+        this.contents = contents;
+        this.rows     = contents.length;
+        this.cols     = contents[0].length;
+        for (Map.Entry<Integer,String> e : parsedLegend.entrySet()) {
+            if (!allowedEntities.contains(e.getValue()))
+                throw new IllegalArgumentException(
+                    "Envelope \"" + name + "\": entity \"" + e.getValue() + "\" not valid. Allowed: " + allowedEntities
+                );
+            legend.put(e.getKey(), e.getValue());
+        }
     }
 
-    /** Entity name at grid position (col, row) */
-    public String readAt(int col, int row) {
-        return read(contents[row][col]);
-    }
+    // ── API ───────────────────────────────────────────────────────
 
-    /** Raw digit at (col, row) */
-    public int get(int col, int row) {
-        if (row < 0 || row >= rows || col < 0 || col >= cols) return -1;
-        return contents[row][col];
-    }
+    public String read(int digit)            { return legend.getOrDefault(digit, "unknown"); }
+    public String readAt(int col, int row)   { return read(contents[row][col]); }
+    public int    get(int col, int row)      { return (row<0||row>=rows||col<0||col>=cols) ? -1 : contents[row][col]; }
+    public boolean is(int col, int row, String entity) { return entity.equals(readAt(col, row)); }
 
-    /** Does this position contain the named entity? */
-    public boolean is(int col, int row, String entity) {
-        return entity.equals(readAt(col, row));
+    // ── FILE LOADER ───────────────────────────────────────────────
+
+    /**
+     * Load an .envelope file from the given path.
+     * Returns a WorldEnvelope or ChunkEnvelope depending on the type: header.
+     */
+    public static Envelope load(String path) throws IOException {
+        try (BufferedReader br = new BufferedReader(new FileReader(path))) {
+            String name = null, type = null;
+            Map<Integer, String> legend = new HashMap<>();
+            List<int[]> gridRows = new ArrayList<>();
+            boolean inGrid = false;
+
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+
+                if (!inGrid) {
+                    if (line.equals("---")) { inGrid = true; continue; }
+                    if (line.startsWith("name:"))   name = line.substring(5).trim();
+                    if (line.startsWith("type:"))   type = line.substring(5).trim();
+                    if (line.startsWith("legend:")) {
+                        for (String token : line.substring(7).trim().split("\\s+")) {
+                            String[] kv = token.split("=");
+                            legend.put(Integer.parseInt(kv[0]), kv[1]);
+                        }
+                    }
+                } else {
+                    int[] row = new int[line.length()];
+                    for (int i = 0; i < line.length(); i++)
+                        row[i] = line.charAt(i) - '0';
+                    gridRows.add(row);
+                }
+            }
+
+            int[][] contents = gridRows.toArray(new int[0][]);
+            if ("world".equals(type)) return new WorldEnvelope(name, contents, legend);
+            if ("chunk".equals(type)) return new ChunkEnvelope(name, contents, legend);
+            throw new IOException("Unknown envelope type: " + type);
+        }
     }
 
     // ── SUBTYPES ──────────────────────────────────────────────────
 
-    /** WorldEnvelope — only accepts biome entities (flatland, bushland, treeland) */
     public static class WorldEnvelope extends Envelope {
         public WorldEnvelope(String name, int[][] contents, Object... legendEntries) {
             super(name, contents, BIOME_ENTITIES, legendEntries);
         }
+        WorldEnvelope(String name, int[][] contents, Map<Integer,String> legend) {
+            super(name, contents, BIOME_ENTITIES, legend);
+        }
     }
 
-    /** ChunkEnvelope — only accepts tile entities (dirt, bush, tree) */
     public static class ChunkEnvelope extends Envelope {
         public ChunkEnvelope(String name, int[][] contents, Object... legendEntries) {
             super(name, contents, TILE_ENTITIES, legendEntries);
+        }
+        ChunkEnvelope(String name, int[][] contents, Map<Integer,String> legend) {
+            super(name, contents, TILE_ENTITIES, legend);
         }
     }
 }
