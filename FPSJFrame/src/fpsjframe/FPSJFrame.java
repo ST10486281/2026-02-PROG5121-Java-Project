@@ -141,29 +141,50 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     }
 
     // ── TREEASCII-DRIVEN VOXEL STAMPER ───────────────────────────
-    // TreeAscii gives a 2D side-view (X=radius, Y=height).
-    // We revolve it around the trunk axis to get a rotationally symmetric 3D tree.
+    // Two TreeAscii grids define the tree:
+    //   sideView (W=20, H=WORLD_Z): side profile — X=world X offset, Y=height (worldZ)
+    //   topView  (W=20, H=20):      top-down canopy shape — X=world X offset, Y=world Y offset
+    // For each lit cell in topView, look up sideView to find what height it reaches.
+    // Centre column of sideView = trunk, distance from centre = branch reach & height.
     private void growTree(int centreX, int centreY, long seed) {
-        int TW = 20, TH = WORLD_Z;
-        TreeAscii skeleton = new TreeAscii(TW, TH, seed);
-        int midX = TW / 2; // centre column = trunk
-        for (int sy = 0; sy < TH; sy++) {
-            int worldZ = (TH - 1) - sy; // flip Y: top of skeleton = top of tree
-            for (int sx = 0; sx < TW; sx++) {
-                if (!skeleton.isTree(sx, sy)) continue;
-                int radius = Math.abs(sx - midX);
-                byte type = (radius <= 1) ? (byte)1 : (byte)2;
-                if (radius == 0) {
-                    stamp(centreX, centreY, worldZ, type);
-                } else {
-                    // Revolve: stamp a ring of voxels at this radius in XY
-                    for (double a = 0; a < Math.PI * 2; a += 0.3) {
-                        int wx = centreX + (int) Math.round(Math.cos(a) * radius);
-                        int wy = centreY + (int) Math.round(Math.sin(a) * radius);
-                        stamp(wx, wy, worldZ, type);
-                    }
+        int TW = 20;
+        TreeAscii side = new TreeAscii(TW, WORLD_Z, seed);        // side profile
+        TreeAscii top  = new TreeAscii(TW, TW,      seed + 1);    // top-down shape
+
+        int midX = TW / 2;
+
+        // For each XY position in the top-down view
+        for (int ty = 0; ty < TW; ty++) {
+            for (int tx = 0; tx < TW; tx++) {
+                if (!top.isTree(tx, ty)) continue;
+
+                // World position of this canopy cell
+                int wx = centreX + (tx - midX);
+                int wy = centreY + (ty - midX);
+
+                // Distance from trunk centre in top view
+                int distX = Math.abs(tx - midX);
+                int distY = Math.abs(ty - midX);
+                int dist  = (int) Math.round(Math.sqrt(distX*distX + distY*distY));
+
+                // Look up the side profile at this horizontal distance:
+                // sideView column = midX + dist. Scan from top to bottom to find
+                // the highest Z this distance reaches in the side skeleton.
+                int sideCol = Math.min(midX + dist, TW - 1);
+                for (int sy = 0; sy < WORLD_Z; sy++) {
+                    if (!side.isTree(sideCol, sy)) continue;
+                    int worldZ = (WORLD_Z - 1) - sy; // flip: sy=0 is top
+                    byte type  = (dist <= 1) ? (byte)1 : (byte)2;
+                    stamp(wx, wy, worldZ, type);
                 }
             }
+        }
+
+        // Always stamp trunk column straight up regardless of top view
+        for (int sy = 0; sy < WORLD_Z; sy++) {
+            if (!side.isTree(midX, sy)) continue;
+            int worldZ = (WORLD_Z - 1) - sy;
+            stamp(centreX, centreY, worldZ, (byte)1);
         }
     }
 
