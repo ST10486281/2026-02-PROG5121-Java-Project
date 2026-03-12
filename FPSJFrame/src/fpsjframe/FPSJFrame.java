@@ -10,11 +10,13 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     private final int nScreenWidth = 800, nScreenHeight = 600;
     private double fPlayerX = 5.0, fPlayerY = 5.0, fPlayerAngle = 0.0;
     private double fFOV = Math.PI / 3.0, fDepth = 24.0, fSpeed = 5.0;
+    private char cLightnessCell = '0'; // cell type that means 'open' — being near this keeps it bright
     private boolean[] keys = new boolean[256];
 
     // ── BIOME SYSTEM ──────────────────────────────────────────────
     private BiomeSystem biomes = new BiomeSystem("maps");
     private int getCell(int wx, int wy)        { return biomes.getCell(wx, wy); }
+    private int getRawCell(int wx, int wy)     { return biomes.getRawCell(wx, wy); }
     private boolean isSolid(double wx, double wy) { return biomes.isSolid(wx, wy); }
 
     // ── GAME STATE ────────────────────────────────────────────────
@@ -98,7 +100,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             }
         }
         double minD=fDepth;
-        for(int ri=-2;ri<=2;ri++){double ra=fPlayerAngle+ri*0.15,rx=Math.cos(ra),ry=Math.sin(ra),rd=0;while(rd<1.5){rd+=0.01;if(getCell((int)(fPlayerX+rx*rd),(int)(fPlayerY+ry*rd))!=0){minD=Math.min(minD,rd);break;}}}
+        for(int ri=-2;ri<=2;ri++){double ra=fPlayerAngle+ri*0.15,rx=Math.cos(ra),ry=Math.sin(ra),rd=0;while(rd<1.5){rd+=0.01;if(getRawCell((int)(fPlayerX+rx*rd),(int)(fPlayerY+ry*rd))!=cLightnessCell){minD=Math.min(minD,rd);break;}}}
         float pa=(float)Math.max(0,Math.min(1,1.0-minD/0.5));
         if(pa>0.01f)for(int py=0;py<nScreenHeight;py++)for(int px=0;px<nScreenWidth;px++){int col=offscreen.getRGB(px,py);offscreen.setRGB(px,py,(((int)(((col>>16)&0xFF)*(1-pa)))<<16)|(((int)(((col>>8)&0xFF)*(1-pa)))<<8)|((int)((col&0xFF)*(1-pa))));}
         offG.drawImage(offscreen,0,0,null); drawHUD(offG);
@@ -117,7 +119,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     private void drawMiniMap(Graphics2D g){
         int cPx=8,mW=BiomeSystem.WORLD_COLS*cPx,mH=BiomeSystem.WORLD_ROWS*cPx,oX=nScreenWidth-mW-10,oY=10;
         g.setColor(new Color(0,0,0,160));g.fillRect(oX-2,oY-2,mW+4,mH+4);
-        for(int row=0;row<BiomeSystem.WORLD_ROWS;row++)for(int col=0;col<BiomeSystem.WORLD_COLS;col++){String bi=biomes.getBiomeName(col,row);g.setColor(bi.equals("bushland")?new Color(180,200,80):bi.equals("treeland")?new Color(60,160,60):new Color(30,100,30));g.fillRect(oX+col*cPx,oY+row*cPx,cPx-1,cPx-1);}
+        for(int row=0;row<BiomeSystem.WORLD_ROWS;row++)for(int col=0;col<BiomeSystem.WORLD_COLS;col++){String bi=biomes.getBiomeName(col,row);g.setColor(bi.equals("bushland")?new Color(180,200,80):bi.equals("treeland")?new Color(60,160,60):bi.equals("testland")?new Color(200,100,200):new Color(30,100,30));g.fillRect(oX+col*cPx,oY+row*cPx,cPx-1,cPx-1);}
         int px=oX+(int)(fPlayerX/BiomeSystem.CHUNK_SIZE*cPx),py=oY+(int)(fPlayerY/BiomeSystem.CHUNK_SIZE*cPx);
         g.setColor(Color.WHITE);g.fillOval(px-2,py-2,5,5);g.setColor(Color.YELLOW);g.drawLine(px,py,(int)(px+Math.cos(fPlayerAngle)*6),(int)(py+Math.sin(fPlayerAngle)*6));
         g.setFont(new Font("Courier New",Font.PLAIN,9));

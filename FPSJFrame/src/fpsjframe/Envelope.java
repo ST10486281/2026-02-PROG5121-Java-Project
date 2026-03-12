@@ -138,7 +138,7 @@ public abstract class Envelope {
             int[][] out = new int[g.length][g[0].length];
             for (int y = 0; y < g.length; y++)
                 for (int x = 0; x < g[0].length; x++)
-                    out[y][x] = g[y][x] - '0';
+                    out[y][x] = (int) g[y][x];
             return out;
         }
     }

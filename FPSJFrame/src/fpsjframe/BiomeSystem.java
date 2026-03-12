@@ -42,9 +42,18 @@ public class BiomeSystem {
         return getChunk(wx / CHUNK_SIZE, wy / CHUNK_SIZE).readAt(wx % CHUNK_SIZE, wy % CHUNK_SIZE);
     }
 
+    public int getRawCell(int wx, int wy) {
+        if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return (int)'2';
+        return getChunk(wx / CHUNK_SIZE, wy / CHUNK_SIZE).get(wx % CHUNK_SIZE, wy % CHUNK_SIZE);
+    }
+
     public int getCell(int wx, int wy) {
         if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return 2;
-        return getChunk(wx / CHUNK_SIZE, wy / CHUNK_SIZE).get(wx % CHUNK_SIZE, wy % CHUNK_SIZE);
+        switch (getEntity(wx, wy)) {
+            case "bush": return 1;
+            case "tree": return 2;
+            default:     return 0; // dirt or unknown = open
+        }
     }
 
     public boolean isSolid(double wx, double wy) {
