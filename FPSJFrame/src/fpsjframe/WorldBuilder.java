@@ -87,7 +87,11 @@ public class WorldBuilder {
         }
 
         // ── Inject procedurally generated objectTree ─────────────────────────
-        objectShapes.put("objectTree", generateTreeObject());
+        ////
+        String treeEnvelope = TreeEnvelopeGenerator.generate(42, 20, 20, 20, 20, 'O', '#');
+        List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
+        objectShapes.put("objectTree", parseObject(treeLines));
+        ////
 
         if (worldNames == null)
             throw new IOException("No world envelope found.");
@@ -168,25 +172,6 @@ public class WorldBuilder {
     // ─────────────────────────────────────────────────────────────────────────
     // Internal data holders
     // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Procedurally generates the objectTree shape — single Y layer test.
-     * Generates one TreeAscii slice and stamps it at y=0 only.
-     */
-    private static ObjectShape generateTreeObject() {
-        ObjectShape shape = new ObjectShape("objectTree");
-        int S = OBJ_SIZE;  // 20
-
-        TreeAscii slice = new TreeAscii(S, S, S, S, ' ', '#', 42);
-
-        // Stamp only at y=0 (single layer)
-        for (int z = 0; z < S; z++)
-            for (int x = 0; x < S; x++)
-                if (slice.grid[z][x] == '#')
-                    shape.voxels[x][0][z] = true;
-
-        return shape;
-    }
 
     /** Parsed object envelope — OBJ_SIZE^3 voxel shape. */
     private static class ObjectShape {
