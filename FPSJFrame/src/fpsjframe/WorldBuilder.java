@@ -13,7 +13,7 @@ import java.util.*;
  * Hierarchy
  *   World  : 2 × 2 chunks          (worldMap.envelope)
  *   Chunk  : N × N objects         (e.g. chunkFlat.envelope → 10 × 10 objects)
- *   Object : 8 × 8 × 8 cells       (e.g. objectTree.envelope)
+ *   Object : 20 × 20 × 20 cells    (e.g. objectTree.envelope)
  *   Cell   : 25 × 25 × 25 cm  →  1 logical unit
  *
  * Usage
@@ -27,7 +27,8 @@ public class WorldBuilder {
 
     public final int worldCellsX;
     public final int worldCellsZ;
-    public static final int WORLD_HEIGHT = 8;
+    public static final int OBJ_SIZE     = 20;  // cells per object side
+    public static final int WORLD_HEIGHT = OBJ_SIZE;
 
     // ── flat cell arrays ──────────────────────────────────────────────────────
 
@@ -105,8 +106,8 @@ public class WorldBuilder {
         // ── Step 3: compute total cell dimensions ─────────────────────────────
 
         ChunkLayout ref    = worldGrid[0][0];
-        int cellsPerChunkX = ref.cols * 8;
-        int cellsPerChunkZ = ref.rows * 8;
+        int cellsPerChunkX = ref.cols * OBJ_SIZE;
+        int cellsPerChunkZ = ref.rows * OBJ_SIZE;
 
         worldCellsX = worldCols * cellsPerChunkX;
         worldCellsZ = worldRows * cellsPerChunkZ;
@@ -129,8 +130,8 @@ public class WorldBuilder {
                         ObjectShape obj = objectShapes.get(chunk.objects[objCol][objRow]);
                         if (obj == null) continue;
 
-                        int ox = chunkOriginX + objCol * 8;
-                        int oz = chunkOriginZ + objRow * 8;
+                        int ox = chunkOriginX + objCol * OBJ_SIZE;
+                        int oz = chunkOriginZ + objRow * OBJ_SIZE;
                         stampObject(obj, ox, oz);
                     }
                 }
@@ -163,10 +164,11 @@ public class WorldBuilder {
     // Internal data holders
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Parsed object envelope — 8×8×8 voxel shape. */
+    /** Parsed object envelope — OBJ_SIZE^3 voxel shape. */
     private static class ObjectShape {
         final String name;
-        final boolean[][][] voxels = new boolean[8][8][8];  // [x][y][z]
+        final boolean[][][] voxels = new boolean[OBJ_SIZE][OBJ_SIZE][OBJ_SIZE];
+        int envX = OBJ_SIZE, envY = OBJ_SIZE, envZ = OBJ_SIZE; // actual envelope dimensions
         ObjectShape(String name) { this.name = name; }
     }
 
@@ -204,12 +206,23 @@ public class WorldBuilder {
 
         List<List<String>> slices = splitIntoSlices(gridLines(lines));
 
-        for (int x = 0; x < Math.min(8, slices.size()); x++) {
+        int actualX = Math.min(OBJ_SIZE, slices.size());
+        int actualY = 0, actualZ = 0;
+        for (int x = 0; x < actualX; x++) {
             List<String> rows = slices.get(x);
-            for (int row = 0; row < Math.min(8, rows.size()); row++) {
-                int y    = 7 - row;           // row 0 = top = y 7
+            actualY = Math.max(actualY, Math.min(OBJ_SIZE, rows.size()));
+            for (String row : rows) actualZ = Math.max(actualZ, Math.min(OBJ_SIZE, row.length()));
+        }
+        shape.envX = actualX;
+        shape.envY = actualY;
+        shape.envZ = actualZ;
+
+        for (int x = 0; x < actualX; x++) {
+            List<String> rows = slices.get(x);
+            for (int row = 0; row < Math.min(OBJ_SIZE, rows.size()); row++) {
+                int y    = (OBJ_SIZE - 1) - row;  // row 0 = top = y (OBJ_SIZE-1)
                 String l = rows.get(row);
-                for (int z = 0; z < Math.min(8, l.length()); z++) {
+                for (int z = 0; z < Math.min(OBJ_SIZE, l.length()); z++) {
                     String meaning = legend.getOrDefault(l.charAt(z), "air");
                     shape.voxels[x][y][z] = !meaning.equals("air");
                 }
@@ -272,15 +285,27 @@ public class WorldBuilder {
     // ─────────────────────────────────────────────────────────────────────────
 
     private void stampObject(ObjectShape obj, int ox, int oz) {
-        for (int x = 0; x < 8; x++) {
-            for (int y = 0; y < 8; y++) {
-                for (int z = 0; z < 8; z++) {
+        // Centre the envelope in the slot on X and Z; sit it on the floor (y=0).
+        // If the envelope is smaller than OBJ_SIZE, offset so it's centred.
+        int offX = (OBJ_SIZE - obj.envX) / 2;
+        int offZ = (OBJ_SIZE - obj.envZ) / 2;
+        // Y: envelope rows were stored with row0=top mapped to y=(OBJ_SIZE-1).
+        // The actual voxels occupy the top envY slots of the array.
+        // We shift them down so they start at y=0 (floor of slot).
+        int offY = -(OBJ_SIZE - obj.envY);  // shift down to sit on ground
+
+        for (int x = 0; x < OBJ_SIZE; x++) {
+            for (int y = 0; y < OBJ_SIZE; y++) {
+                for (int z = 0; z < OBJ_SIZE; z++) {
                     if (!obj.voxels[x][y][z]) continue;
-                    int wx = ox + x;
-                    int wz = oz + z;
-                    if (wx >= worldCellsX || wz >= worldCellsZ) continue;
-                    solid    [wx][y][wz] = true;
-                    cellColor[wx][y][wz] = pickColor(obj.name, x, y, z);
+                    int wx = ox + x + offX;
+                    int wy =      y + offY;
+                    int wz = oz + z + offZ;
+                    if (wx < 0 || wx >= worldCellsX) continue;
+                    if (wy < 0 || wy >= WORLD_HEIGHT) continue;
+                    if (wz < 0 || wz >= worldCellsZ) continue;
+                    solid    [wx][wy][wz] = true;
+                    cellColor[wx][wy][wz] = pickColor(obj.name, x, y, z);
                 }
             }
         }
@@ -294,11 +319,11 @@ public class WorldBuilder {
 
             case "objectBush":
                 // bottom two rows are the thin stem; above is the leafy body
-                return (y <= 1) ? COL_BUSH_STEM : COL_BUSH_BODY;
+                return (y <= (OBJ_SIZE / 8)) ? COL_BUSH_STEM : COL_BUSH_BODY;
 
             case "objectTree":
                 // central 2×2 columns at lower half = trunk; rest = canopy
-                boolean isTrunk = (x >= 3 && x <= 4 && z >= 3 && z <= 4 && y < 5);
+                boolean isTrunk = (x >= OBJ_SIZE*3/8 && x <= OBJ_SIZE*4/8 && z >= OBJ_SIZE*3/8 && z <= OBJ_SIZE*4/8 && y < OBJ_SIZE*5/8);
                 return isTrunk ? COL_TREE_TRUNK : COL_TREE_LEAF;
 
             default:

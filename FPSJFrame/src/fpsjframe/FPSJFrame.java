@@ -30,11 +30,13 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
     // ── movement / look ──────────────────────────────────────────────────────
 
-    static final double MOVE_SPEED  = 0.12;
+    static final double MOVE_SPEED  = 0.35;
     static final double TURN_SPEED  = 0.04;
-    static final double STRAFE_SPEED = 0.09;
-    static final double EYE_HEIGHT  = 4.0;   // cells above y = 0
-    static final double CELL_SCALE  = 2.0;   // projected cell size (1.0=original, 0.5=half)
+    static final double STRAFE_SPEED = 0.28;
+    static final double EYE_HEIGHT  = 5.5;   // cells above y = 0
+    static final double CELL_SCALE_H = 30.0;   // height  – how tall cells appear on screen
+    static final double CELL_SCALE_W = 1.0;   // width   – horizontal stretch (>1 = wider, <1 = narrower)
+    static final double CELL_SCALE_B = 1.0;   // breadth – depth compression  (>1 = closer, <1 = farther)
 
     // ── player state ─────────────────────────────────────────────────────────
 
@@ -188,7 +190,9 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         for (int col = 0; col < SW; col++) {
 
             // Ray direction for this screen column
-            double rayAngle = angle - FOV / 2.0 + (FOV * col) / SW;
+            // CELL_SCALE_W stretches columns away from centre (>1 = wider view = world appears narrower)
+            double normCol  = (col - SW / 2.0) / (SW / 2.0);   // -1 to +1
+            double rayAngle = angle + Math.atan(Math.tan(FOV / 2.0) * normCol / CELL_SCALE_W);
             double rdx = Math.sin(rayAngle);
             double rdz = Math.cos(rayAngle);
 
@@ -235,7 +239,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 if (perpDist <= 0) perpDist = 0.001;
 
                 // How many pixels tall is one cell at this distance?
-                double cellScreenH = (double) SH / (WorldBuilder.WORLD_HEIGHT * perpDist) * CELL_SCALE;
+                double cellScreenH = (double) SH / (WorldBuilder.WORLD_HEIGHT * (perpDist / CELL_SCALE_B)) * CELL_SCALE_H;
 
                 // Screen Y of the bottom of y=0 (ground level).
                 // Horizon is at SH/2; eye is EYE_HEIGHT cells above ground.
