@@ -11,17 +11,9 @@ public class TreeEnvelopeGenerator {
         sb.append("legend: " + airChar + "=air " + treeChar + "=tree\n");
         sb.append("---\n");
 
-        for (int x = 0; x < canvasW; x++) {
-            if (x > 0) sb.append("===\n");
-            // rows 0..(canvasH-2) are air (above ground)
-            for (int row = 0; row < canvasH - 1; row++) {
-                for (int z = 0; z < canvasW; z++) sb.append(airChar);
-                sb.append('\n');
-            }
-            // last row = y=0 = ground level: tree footprint
-            for (int z = 0; z < canvasH; z++) {
-                sb.append(t.grid[z][x]);
-            }
+        // single slice: one row per Z, one char per X
+        for (int z = 0; z < canvasH; z++) {
+            sb.append(new String(t.grid[z]));
             sb.append('\n');
         }
 
