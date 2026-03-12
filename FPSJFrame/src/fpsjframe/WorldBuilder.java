@@ -100,10 +100,17 @@ public class WorldBuilder {
         // List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         // objectShapes.put("objectTree", parseObject(treeLines));
 
-        
+
         String treeEnvelope = LSystemTreeEnvelopeGenerator.generate(20, 4);
         List<String> treeLines = Arrays.asList(treeEnvelope.split("\n"));
         objectShapes.put("objectTree", parseObject(treeLines));
+
+        
+ 
+        // ── Inject procedurally generated objectBush (L-System) ──────────────
+        String bushEnvelope = LSystemBushEnvelopeGenerator.generate(20, 3);
+        List<String> bushLines = Arrays.asList(bushEnvelope.split("\\n"));
+        objectShapes.put("objectBush", parseObject(bushLines));
 
         if (worldNames == null)
             throw new IOException("No world envelope found.");
