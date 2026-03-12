@@ -8,7 +8,7 @@ import java.awt.image.BufferedImage;
 public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
     private final int nScreenWidth = 800, nScreenHeight = 600;
-    private double fPlayerX = 5.0, fPlayerY = 5.0, fPlayerAngle = 0.0;
+    private double fPlayerX = 20.0, fPlayerY = 11.0, fPlayerAngle = 0.0;
     private double fFOV = Math.PI / 3.0, fDepth = 24.0, fSpeed = 5.0;
     private char cLightnessCell = '0'; // cell type that means 'open' — being near this keeps it bright
     private boolean[] keys = new boolean[256];
@@ -89,50 +89,48 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 lastWX=wx; lastWY=wy;
                 BlockEnvelope block=biomes.getBlock(wx,wy);
                 if(block==null) continue;
-                double tileX=wx, tileY=wy;
-                double subStep=1.0/BlockEnvelope.SIZE;
-                double entryDist=dist-0.02;
-                for(double sd=entryDist; sd<entryDist+1.5 && !hitSolid; sd+=subStep*0.25){
-                    double sx=fPlayerX+eyeX*sd, sy2=fPlayerY+eyeY*sd;
-                    if((int)sx!=wx||(int)sy2!=wy) continue;
-                    double fx=sx-tileX, fy=sy2-tileY;
-                    // bCol = left-right across the visible face (perpendicular to ray)
-                    // depth = how far into the block (parallel to ray)
-                    int bCol, depth;
-                    if(Math.abs(eyeX)>Math.abs(eyeY)){
-                        bCol =(int)(fy*BlockEnvelope.SIZE); // ray in X, face is Y axis
-                        depth=(int)(fx*BlockEnvelope.SIZE);
-                    } else {
-                        bCol =(int)(fx*BlockEnvelope.SIZE); // ray in Y, face is X axis
-                        depth=(int)(fy*BlockEnvelope.SIZE);
-                    }
-                    bCol =Math.max(0,Math.min(BlockEnvelope.SIZE-1,bCol));
-                    depth=Math.max(0,Math.min(BlockEnvelope.SIZE-1,depth));
-                    if(!block.hasAnySolid(bCol,depth)) continue;
-                    // hit — find solid row span and render it
-                    hitSolid=true;
-                    int[] span=block.solidRowSpan(bCol,depth);
-                    if(span[0]==-1) continue;
-                    float distB=(float)Math.max(0.05,1.0-sd/fDepth);
-                    double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0;
-                    double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
-                    float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
-                    int wallH=Math.max(1,(int)(nScreenHeight/sd));
-                    int sliceH=Math.max(1,wallH/BlockEnvelope.SIZE);
-                    int blockTop=nScreenHeight/2-wallH/2;
-                    int screenTop   =blockTop+span[0]*sliceH;
-                    int screenBottom=blockTop+(span[1]+1)*sliceH;
-                    for(int sy=screenTop;sy<screenBottom;sy++){
-                        if(sy<0||sy>=nScreenHeight) continue;
-                        int vRow=span[0]+(int)(((sy-screenTop)/(double)(screenBottom-screenTop))*(span[1]-span[0]+1));
-                        vRow=Math.max(0,Math.min(BlockEnvelope.SIZE-1,vRow));
-                        int base=160-(vRow*12);
-                        int r=(int)(base*brightness);
-                        int g=(int)((base*0.55)*brightness);
-                        int b=(int)((base*0.25)*brightness);
-                        r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
-                        offscreen.setRGB(x,sy,(r<<16)|(g<<8)|b);
-                    }
+                hitSolid=true;
+
+                // look up the stored block origin for this cell
+                int CPB=BiomeSystem.CELLS_PER_BLOCK;
+                int[] origin=biomes.getCellBlockOrigin(wx,wy);
+                if(origin[0]<0){ hitSolid=false; continue; }
+                int blockOX=origin[0], blockOY=origin[1];
+                // cx = left-right position within block (perpendicular to ray)
+                // cz = depth position within block (parallel to ray)
+                int cx, cz;
+                if(Math.abs(eyeX)>Math.abs(eyeY)){
+                    cx=wy-blockOY;
+                    cz=wx-blockOX;
+                } else {
+                    cx=wx-blockOX;
+                    cz=wy-blockOY;
+                }
+                cx=Math.max(0,Math.min(CPB-1,cx));
+                cz=Math.max(0,Math.min(CPB-1,cz));
+
+                int[] span=block.solidRowSpan(cx,cz);
+                if(span[0]==-1){ hitSolid=false; continue; }
+
+                float distB=(float)Math.max(0.05,1.0-dist/fDepth);
+                double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0;
+                double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
+                float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
+                int wallH=Math.max(1,(int)(nScreenHeight/dist));
+                int sliceH=Math.max(1,wallH/CPB);
+                int blockTop=nScreenHeight/2-wallH/2;
+                int screenTop   =blockTop+span[0]*sliceH;
+                int screenBottom=blockTop+(span[1]+1)*sliceH;
+                for(int sy=screenTop;sy<screenBottom;sy++){
+                    if(sy<0||sy>=nScreenHeight) continue;
+                    int vRow=span[0]+(int)(((sy-screenTop)/(double)(screenBottom-screenTop))*(span[1]-span[0]+1));
+                    vRow=Math.max(0,Math.min(CPB-1,vRow));
+                    int base=160-(vRow*12);
+                    int r=(int)(base*brightness);
+                    int g=(int)((base*0.55)*brightness);
+                    int b=(int)((base*0.25)*brightness);
+                    r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
+                    offscreen.setRGB(x,sy,(r<<16)|(g<<8)|b);
                 }
             }
         }
@@ -165,7 +163,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         g.setColor(new Color(30,100,30));g.fillRect(oX,oY+mH+24,8,8);g.setColor(Color.WHITE);g.drawString("Trees",oX+10,oY+mH+32);
     }
 
-    private void restart(){fPlayerX=5;fPlayerY=5;fPlayerAngle=0;nHealth=100;nAmmo=30;bGameOver=false;bShooting=false;}
+    private void restart(){fPlayerX=20;fPlayerY=11;fPlayerAngle=0;nHealth=100;nAmmo=30;bGameOver=false;bShooting=false;}
     @Override protected void paintComponent(Graphics g){super.paintComponent(g);g.drawImage(offscreen,0,0,null);}
     @Override public void keyPressed(KeyEvent e){int c=e.getKeyCode();if(c<256)keys[c]=true;if(c==KeyEvent.VK_R)restart();}
     @Override public void keyReleased(KeyEvent e){int c=e.getKeyCode();if(c<256)keys[c]=false;}

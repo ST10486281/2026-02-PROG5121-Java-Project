@@ -4,16 +4,30 @@ import java.io.IOException;
 
 public class BiomeSystem {
 
-    public static final int WORLD_COLS = 6, WORLD_ROWS = 6;
-    public static final int CHUNK_SIZE = 10;
-    public static final int WORLD_W = WORLD_COLS * CHUNK_SIZE;
-    public static final int WORLD_H = WORLD_ROWS * CHUNK_SIZE;
+    // ── HIERARCHY ─────────────────────────────────────────────────
+    public static final int CELLS_PER_BLOCK  = 8;   // 8 cells = 2m
+    public static final int BLOCKS_PER_CHUNK = 5;   // 5 blocks = 10m
+    public static final int CHUNKS_PER_WORLD = 2;   // 2 chunks = 20m per axis
 
+    public static final int CELLS_PER_CHUNK  = BLOCKS_PER_CHUNK * CELLS_PER_BLOCK; // 40
+    public static final int WORLD_COLS       = CHUNKS_PER_WORLD;
+    public static final int WORLD_ROWS       = CHUNKS_PER_WORLD;
+    public static final int WORLD_W          = WORLD_COLS * CELLS_PER_CHUNK; // 80
+    public static final int WORLD_H          = WORLD_ROWS * CELLS_PER_CHUNK; // 80
+
+    // legacy alias used by minimap
+    public static final int CHUNK_SIZE       = CELLS_PER_CHUNK;
+
+    // ── ENVELOPES ────────────────────────────────────────────────
     public final Envelope.WorldEnvelope worldMap;
-    public final Envelope.ChunkEnvelope chunkFlat, chunkBush, chunkTree, chunkTest;
-
-    // ── BLOCK REGISTRY ────────────────────────────────────────────
+    public final Envelope.ChunkEnvelope chunkFlat, chunkBush, chunkTree;
     public final BlockEnvelope bushBlock, treeBlock;
+
+    // ── WORLD CELL GRID (expanded from chunks+blocks) ────────────
+    // cellGrid[wy][wx] = entity name at that cell
+    private final String[][] cellGrid;
+    // blockOriginX/Y[wy][wx] = world origin of the block this cell belongs to (-1 if none)
+    private final int[][] blockOriginX, blockOriginY;
 
     public BiomeSystem(String mapsDir) {
         try {
@@ -25,47 +39,101 @@ public class BiomeSystem {
             throw new RuntimeException("Failed to load map files from: " + mapsDir, e);
         }
 
-        // chunkTest: dynamic — generated from TreeAscii, not a file
-        TreeAscii ta = new TreeAscii(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, '0', '1');
-        chunkTest = new Envelope.ChunkEnvelope("chunkTest", ta.grid, (int)'0', "dirt", (int)'1', "bush");
-
-        // blocks — load from file if present, else use hardcoded defaults
         BlockEnvelope bb = BlockEnvelope.makeBush(), tb = BlockEnvelope.makeTree();
         try { bb = BlockEnvelope.load(mapsDir + "/bushBlock.envelope"); } catch (IOException ignored) {}
         try { tb = BlockEnvelope.load(mapsDir + "/treeBlock.envelope"); } catch (IOException ignored) {}
         bushBlock = bb;
         treeBlock = tb;
+
+        // ── BUILD CELL GRID ───────────────────────────────────────
+        cellGrid = new String[WORLD_H][WORLD_W];
+        blockOriginX = new int[WORLD_H][WORLD_W];
+        blockOriginY = new int[WORLD_H][WORLD_W];
+        for (int wy = 0; wy < WORLD_H; wy++)
+            for (int wx = 0; wx < WORLD_W; wx++) {
+                cellGrid[wy][wx] = "air";
+                blockOriginX[wy][wx] = -1;
+                blockOriginY[wy][wx] = -1;
+            }
+
+        // for each chunk in world
+        for (int chunkRow = 0; chunkRow < WORLD_ROWS; chunkRow++) {
+            for (int chunkCol = 0; chunkCol < WORLD_COLS; chunkCol++) {
+                Envelope.ChunkEnvelope chunk = getChunkEnvelope(chunkCol, chunkRow);
+                int chunkOriginX = chunkCol * CELLS_PER_CHUNK;
+                int chunkOriginY = chunkRow * CELLS_PER_CHUNK;
+
+                // for each block position in chunk (5x5)
+                for (int by = 0; by < BLOCKS_PER_CHUNK; by++) {
+                    for (int bx = 0; bx < BLOCKS_PER_CHUNK; bx++) {
+                        String entity = chunk.readAt(bx, by);
+                        if (entity.equals("air")) continue;
+
+                        // block origin in cell space
+                        int boX = chunkOriginX + bx * CELLS_PER_BLOCK;
+                        int boY = chunkOriginY + by * CELLS_PER_BLOCK;
+
+                        // get the block's footprint envelope
+                        BlockEnvelope block = entity.equals("bushBlock") ? bushBlock
+                                            : entity.equals("treeBlock") ? treeBlock
+                                            : null;
+
+                        // stamp 8x8 footprint into cell grid
+                        for (int cy = 0; cy < CELLS_PER_BLOCK; cy++) {
+                            for (int cx = 0; cx < CELLS_PER_BLOCK; cx++) {
+                                int wx = boX + cx;
+                                int wy2 = boY + cy;
+                                if (wx >= WORLD_W || wy2 >= WORLD_H) continue;
+                                boolean solid = false;
+                                if (block != null) {
+                                    for (int depth = 0; depth < CELLS_PER_BLOCK && !solid; depth++)
+                                        for (int row = 0; row < CELLS_PER_BLOCK && !solid; row++)
+                                            if (block.isSolid(cx, row, depth)) solid = true;
+                                }
+                                if (solid) {
+                                    cellGrid[wy2][wx] = entity;
+                                    blockOriginX[wy2][wx] = boX;
+                                    blockOriginY[wy2][wx] = boY;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    public Envelope getChunk(int worldCol, int worldRow) {
-        switch (worldMap.readAt(worldCol, worldRow)) {
+    private Envelope.ChunkEnvelope getChunkEnvelope(int col, int row) {
+        switch (worldMap.readAt(col, row)) {
             case "bushland": return chunkBush;
             case "treeland": return chunkTree;
-            case "testland": return chunkTest;
             default:         return chunkFlat;
         }
     }
 
     public String getEntity(int wx, int wy) {
         if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return "treeBlock";
-        return getChunk(wx / CHUNK_SIZE, wy / CHUNK_SIZE).readAt(wx % CHUNK_SIZE, wy % CHUNK_SIZE);
+        return cellGrid[wy][wx];
     }
 
     public int getRawCell(int wx, int wy) {
-        if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return (int)'2';
-        return getChunk(wx / CHUNK_SIZE, wy / CHUNK_SIZE).get(wx % CHUNK_SIZE, wy % CHUNK_SIZE);
+        String e = getEntity(wx, wy);
+        return e.equals("air") ? (int)'0' : (int)'1';
     }
 
     public int getCell(int wx, int wy) {
-        if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return 2;
         switch (getEntity(wx, wy)) {
-            case "bush": case "bushBlock": return 1;
-            case "tree": case "treeBlock": return 2;
-            default: return 0;
+            case "bushBlock": return 1;
+            case "treeBlock": return 2;
+            default:          return 0;
         }
     }
 
-    /** Returns the BlockEnvelope for a block entity at world position, or null if not a block. */
+    public int[] getCellBlockOrigin(int wx, int wy) {
+        if (wx < 0 || wx >= WORLD_W || wy < 0 || wy >= WORLD_H) return new int[]{-1,-1};
+        return new int[]{blockOriginX[wy][wx], blockOriginY[wy][wx]};
+    }
+
     public BlockEnvelope getBlock(int wx, int wy) {
         switch (getEntity(wx, wy)) {
             case "bushBlock": return bushBlock;
@@ -76,7 +144,7 @@ public class BiomeSystem {
 
     public boolean isSolid(double wx, double wy) {
         String e = getEntity((int) wx, (int) wy);
-        return e.equals("bush") || e.equals("tree") || e.equals("bushBlock") || e.equals("treeBlock");
+        return !e.equals("air");
     }
 
     public String getBiomeName(int col, int row) {

@@ -21,7 +21,7 @@ public abstract class Envelope {
 
     // ── GLOBAL ENTITY REGISTRY ────────────────────────────────────
     public static final Set<String> BIOME_ENTITIES = Set.of("flatland", "bushland", "treeland", "testland");
-    public static final Set<String> TILE_ENTITIES  = Set.of("dirt", "bush", "tree", "bushBlock", "treeBlock");
+    public static final Set<String> TILE_ENTITIES  = Set.of("air", "dirt", "bush", "tree", "bushBlock", "treeBlock");
 
     // ── COVER ─────────────────────────────────────────────────────
     public final String name;

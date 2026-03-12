@@ -1,10 +1,6 @@
 name: worldMap
 type: world
-legend: 0=flatland 1=bushland f=treeland
+legend: 0=flatland 1=bushland 2=treeland
 ---
-0011ff
-0011ff
-011ff1
-11ff10
-ff1100
-ff1000
+21
+10
