@@ -5,173 +5,345 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 
+/**
+ * FPSJFrame
+ *
+ * A DDA-based raycaster that renders the voxel world built by WorldBuilder.
+ * Each vertical screen column fires one ray; wall height is computed from
+ * the perpendicular distance to the first solid cell hit.
+ *
+ * Controls
+ *   W / Up     – move forward
+ *   S / Down   – move backward
+ *   A / Left   – turn left
+ *   D / Right  – turn right
+ *   Q          – strafe left
+ *   E          – strafe right
+ *   R          – restart (respawn at origin)
+ */
 public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
-    private final int nScreenWidth = 800, nScreenHeight = 600;
-    private double fPlayerX = 20.0, fPlayerY = 11.0, fPlayerAngle = 0.0;
-    private double fFOV = Math.PI / 3.0, fDepth = 24.0, fSpeed = 5.0;
-    private char cLightnessCell = '0'; // cell type that means 'open' — being near this keeps it bright
-    private boolean[] keys = new boolean[256];
+    // ── screen ───────────────────────────────────────────────────────────────
 
-    // ── BIOME SYSTEM ──────────────────────────────────────────────
-    private BiomeSystem biomes = new BiomeSystem("maps");
-    private int getCell(int wx, int wy)        { return biomes.getCell(wx, wy); }
-    private int getRawCell(int wx, int wy)     { return biomes.getRawCell(wx, wy); }
-    private boolean isSolid(double wx, double wy) { return biomes.isSolid(wx, wy); }
+    static final int SW = 800;
+    static final int SH = 500;
 
-    // ── GAME STATE ────────────────────────────────────────────────
-    private int nHealth=100, nAmmo=30, nShootTimer=0;
-    private boolean bShooting=false, bGameOver=false, bRunning=true;
-    private BufferedImage offscreen; private Graphics2D offG;
-    private long lastTime=System.nanoTime(); private double fps=0;
+    // ── movement / look ──────────────────────────────────────────────────────
 
-    // ── TEXTURES ─────────────────────────────────────────────────
-    private static final int TEX_W=64, TEX_H=64;
-    private int[] texBrick=new int[TEX_W*TEX_H];
-    private int[] texBush =new int[TEX_W*TEX_H];
-    private int[] texTree =new int[TEX_W*TEX_H];
-    private Color[] wallShades=new Color[10], floorShades=new Color[10];
+    static final double MOVE_SPEED  = 0.12;
+    static final double TURN_SPEED  = 0.04;
+    static final double STRAFE_SPEED = 0.09;
+    static final double EYE_HEIGHT  = 4.0;   // cells above y = 0
+
+    // ── player state ─────────────────────────────────────────────────────────
+
+    double px, pz;          // position in cell-space (X and Z are the ground plane)
+    double angle;           // yaw in radians (0 = +Z, π/2 = +X)
+    static final double FOV = Math.PI / 3.0;   // 60°
+
+    // ── world ────────────────────────────────────────────────────────────────
+
+    WorldBuilder world;
+
+    // ── rendering ────────────────────────────────────────────────────────────
+
+    BufferedImage frameBuffer;
+    int[]         pixels;
+
+    // ── input ────────────────────────────────────────────────────────────────
+
+    boolean[] keys = new boolean[65536];
+
+    // ── colours ──────────────────────────────────────────────────────────────
+
+    static final Color SKY_TOP    = new Color( 30,  90, 180);
+    static final Color SKY_BTM    = new Color(120, 170, 220);
+    static final Color FLOOR_COL  = new Color( 55,  75,  45);
+    static final Color FLOOR_DARK = new Color( 35,  50,  30);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Entry point
+    // ─────────────────────────────────────────────────────────────────────────
+
+    public static void main(String[] args) {
+        JFrame frame = new JFrame("FPS Voxel World");
+        FPSJFrame game = new FPSJFrame();
+        frame.add(game);
+        frame.setSize(SW, SH + 22);   // +22 for title bar
+        frame.setResizable(false);
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setVisible(true);
+        new Thread(game).start();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Constructor
+    // ─────────────────────────────────────────────────────────────────────────
 
     public FPSJFrame() {
-        setPreferredSize(new Dimension(nScreenWidth,nScreenHeight));
-        setBackground(Color.BLACK); setFocusable(true); addKeyListener(this);
-        offscreen=new BufferedImage(nScreenWidth,nScreenHeight,BufferedImage.TYPE_INT_RGB);
-        offG=offscreen.createGraphics();
-        for(int i=0;i<10;i++){float b=(i+1)/10f;wallShades[i]=new Color((int)(180*b),(int)(80*b),(int)(40*b));floorShades[i]=new Color((int)(60*b),(int)(60*b),(int)(60*b));}
-        java.util.Random rng=new java.util.Random(42);
-        generateBrickTex(rng); generateBushTex(rng); generateTreeTex(rng);
-        new Thread(this).start();
+        setPreferredSize(new Dimension(SW, SH));
+        setFocusable(true);
+        addKeyListener(this);
+
+        frameBuffer = new BufferedImage(SW, SH, BufferedImage.TYPE_INT_RGB);
+        pixels      = ((java.awt.image.DataBufferInt) frameBuffer.getRaster().getDataBuffer()).getData();
+
+        // Load world from envelope files (same directory as the .class files, or adjust path)
+        String envelopeDir = System.getProperty("envelopes", ".");
+        try {
+            world = new WorldBuilder(envelopeDir);
+        } catch (Exception e) {
+            System.err.println("Failed to load world: " + e.getMessage());
+            e.printStackTrace();
+            System.exit(1);
+        }
+
+        respawn();
     }
 
-    private float[] makeNoise(java.util.Random rng, int passes) {
-        float[] n=new float[TEX_W*TEX_H];
-        for(int i=0;i<n.length;i++) n[i]=rng.nextFloat();
-        for(int p=0;p<passes;p++){float[] t=new float[TEX_W*TEX_H];for(int ty=0;ty<TEX_H;ty++)for(int tx=0;tx<TEX_W;tx++){float s=0;int c=0;for(int dy=-2;dy<=2;dy++)for(int dx=-2;dx<=2;dx++){s+=n[((ty+dy+TEX_H)%TEX_H)*TEX_W+((tx+dx+TEX_W)%TEX_W)];c++;}t[ty*TEX_W+tx]=s/c;}n=t;}
-        return n;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Spawn player in an open area near the centre of the world
+    // ─────────────────────────────────────────────────────────────────────────
+
+    void respawn() {
+        angle = 0;
+        // Start near the centre; scan outward until we find an open ground cell
+        double cx = world.worldCellsX / 2.0;
+        double cz = world.worldCellsZ / 2.0;
+        for (int r = 0; r < 40; r++) {
+            int tx = (int)(cx) + r;
+            int tz = (int)(cz) + r;
+            if (!world.isSolid(tx, (int) EYE_HEIGHT, tz)) {
+                px = tx + 0.5;
+                pz = tz + 0.5;
+                return;
+            }
+        }
+        // Fallback
+        px = 1.5;
+        pz = 1.5;
     }
 
-    private void generateBrickTex(java.util.Random rng){float[] n=makeNoise(rng,3);for(int ty=0;ty<TEX_H;ty++)for(int tx=0;tx<TEX_W;tx++){float v=n[ty*TEX_W+tx];int row=ty/8,off=(row%2==0)?0:TEX_W/2,bx=(tx+off)%TEX_W;boolean m=(ty%8==0)||(ty%8==7)||(bx%16==0)||(bx%16==15);int r,g,b;if(m){int q=(int)(60+v*30);r=q;g=q;b=q;}else{r=(int)(120+v*60);g=(int)(55+v*30);b=(int)(30+v*20);}texBrick[ty*TEX_W+tx]=(r<<16)|(g<<8)|b;}}
-    private void generateBushTex(java.util.Random rng){float[] n=makeNoise(rng,2);for(int ty=0;ty<TEX_H;ty++)for(int tx=0;tx<TEX_W;tx++){float v=n[ty*TEX_W+tx];int r=(int)(30+v*40),g=(int)(100+v*80),b=(int)(20+v*30);if(v<0.35f){r=(int)(r*0.6);g=(int)(g*0.6);b=(int)(b*0.6);}if(tx%16==7||tx%16==8){r=(int)(60+v*20);g=(int)(40+v*20);b=10;}texBush[ty*TEX_W+tx]=(r<<16)|(g<<8)|b;}}
-    private void generateTreeTex(java.util.Random rng){float[] n=makeNoise(rng,2),n2=makeNoise(rng,1);for(int ty=0;ty<TEX_H;ty++)for(int tx=0;tx<TEX_W;tx++){float v=n[ty*TEX_W+tx],v2=n2[ty*TEX_W+tx];boolean dk=(tx%12<4);int r,g,b;if(dk){r=(int)(55+v*30);g=(int)(35+v*20);b=(int)(15+v*10);}else{r=(int)(100+v*50);g=(int)(65+v*30);b=(int)(25+v*20);}if(ty%10<2){r=(int)(r*0.7);g=(int)(g*0.7);b=(int)(b*0.7);}r=Math.min(255,(int)(r+v2*20-10));g=Math.min(255,(int)(g+v2*15-7));texTree[ty*TEX_W+tx]=(r<<16)|(g<<8)|b;}}
+    // ─────────────────────────────────────────────────────────────────────────
+    // Game loop
+    // ─────────────────────────────────────────────────────────────────────────
 
-    @Override public void run(){while(bRunning){long now=System.nanoTime();double dt=(now-lastTime)/1e9;lastTime=now;if(!bGameOver)update(dt);render();repaint();fps=1.0/dt;try{Thread.sleep(8);}catch(InterruptedException e){Thread.currentThread().interrupt();}}}
+    @Override
+    public void run() {
+        long lastTime = System.nanoTime();
+        while (true) {
+            long now = System.nanoTime();
+            double dt = (now - lastTime) / 1_000_000_000.0;
+            lastTime  = now;
 
-    private void update(double dt){
-        if(keys[KeyEvent.VK_LEFT]||keys[KeyEvent.VK_A])  fPlayerAngle-=fSpeed*0.5*dt;
-        if(keys[KeyEvent.VK_RIGHT]||keys[KeyEvent.VK_D]) fPlayerAngle+=fSpeed*0.5*dt;
-        double nx=fPlayerX,ny=fPlayerY;
-        if(keys[KeyEvent.VK_UP]||keys[KeyEvent.VK_W])   {nx+=Math.cos(fPlayerAngle)*fSpeed*dt;ny+=Math.sin(fPlayerAngle)*fSpeed*dt;}
-        if(keys[KeyEvent.VK_DOWN]||keys[KeyEvent.VK_S]) {nx-=Math.cos(fPlayerAngle)*fSpeed*dt;ny-=Math.sin(fPlayerAngle)*fSpeed*dt;}
-        if(keys[KeyEvent.VK_Q]){nx+=Math.sin(fPlayerAngle)*fSpeed*dt;ny-=Math.cos(fPlayerAngle)*fSpeed*dt;}
-        if(keys[KeyEvent.VK_E]){nx-=Math.sin(fPlayerAngle)*fSpeed*dt;ny+=Math.cos(fPlayerAngle)*fSpeed*dt;}
-        if(!isSolid(nx,fPlayerY))fPlayerX=nx;
-        if(!isSolid(fPlayerX,ny))fPlayerY=ny;
-        if(bShooting){nShootTimer--;if(nShootTimer<=0)bShooting=false;}
+            handleInput(dt);
+            renderFrame();
+            repaint();
+
+            // ~60 fps cap
+            try { Thread.sleep(16); } catch (InterruptedException ignored) {}
+        }
     }
 
-    private void render(){
-        int W=BiomeSystem.WORLD_W, H=BiomeSystem.WORLD_H;
-        // sky
-        for(int y=0;y<nScreenHeight/2;y++){float t=(float)y/(nScreenHeight/2f);int r=(int)(15+25*t),g=(int)(40+30*t),b=(int)(15+20*t);for(int x=0;x<nScreenWidth;x++)offscreen.setRGB(x,y,(r<<16)|(g<<8)|b);}
-        // floor
-        for(int y=nScreenHeight/2;y<nScreenHeight;y++){float t=(float)(y-nScreenHeight/2)/(nScreenHeight/2f);int r=(int)(40+20*t),g=(int)(50+25*t),b=(int)(20+10*t);for(int x=0;x<nScreenWidth;x++)offscreen.setRGB(x,y,(r<<16)|(g<<8)|b);}
-        for(int x=0;x<nScreenWidth;x++){
-            double rayA=(fPlayerAngle-fFOV/2.0)+((double)x/nScreenWidth)*fFOV;
-            double eyeX=Math.cos(rayA),eyeY=Math.sin(rayA);
-            double dist=0;
-            int lastWX=-1, lastWY=-1;
-            boolean hitSolid=false;
-            while(dist<fDepth && !hitSolid){
-                dist+=0.02;
-                int wx=(int)(fPlayerX+eyeX*dist), wy=(int)(fPlayerY+eyeY*dist);
-                if(wx<0||wx>=W||wy<0||wy>=H) break;
-                if(wx==lastWX&&wy==lastWY) continue;
-                lastWX=wx; lastWY=wy;
-                BlockEnvelope block=biomes.getBlock(wx,wy);
-                if(block==null) continue;
-                hitSolid=true;
+    // ─────────────────────────────────────────────────────────────────────────
+    // Input
+    // ─────────────────────────────────────────────────────────────────────────
 
-                // look up the stored block origin for this cell
-                int CPB=BiomeSystem.CELLS_PER_BLOCK;
-                int[] origin=biomes.getCellBlockOrigin(wx,wy);
-                if(origin[0]<0){ hitSolid=false; continue; }
-                int blockOX=origin[0], blockOY=origin[1];
-                // cx = left-right position within block (perpendicular to ray)
-                // cz = depth position within block (parallel to ray)
-                int cx, cz;
-                if(Math.abs(eyeX)>Math.abs(eyeY)){
-                    cx=wy-blockOY;
-                    cz=wx-blockOX;
+    void handleInput(double dt) {
+        double speed   = MOVE_SPEED;
+        double strafe  = STRAFE_SPEED;
+
+        if (keys[KeyEvent.VK_W] || keys[KeyEvent.VK_UP])    tryMove( Math.sin(angle) * speed,  Math.cos(angle) * speed);
+        if (keys[KeyEvent.VK_S] || keys[KeyEvent.VK_DOWN])  tryMove(-Math.sin(angle) * speed, -Math.cos(angle) * speed);
+        if (keys[KeyEvent.VK_Q])                             tryMove( Math.cos(angle) * strafe, -Math.sin(angle) * strafe);
+        if (keys[KeyEvent.VK_E])                             tryMove(-Math.cos(angle) * strafe,  Math.sin(angle) * strafe);
+        if (keys[KeyEvent.VK_A] || keys[KeyEvent.VK_LEFT])  angle -= TURN_SPEED;
+        if (keys[KeyEvent.VK_D] || keys[KeyEvent.VK_RIGHT]) angle += TURN_SPEED;
+        if (keys[KeyEvent.VK_R])                             respawn();
+    }
+
+    /** Move with simple axis-separated collision. */
+    void tryMove(double dx, double dz) {
+        double nx = px + dx;
+        double nz = pz + dz;
+        int ey    = (int) EYE_HEIGHT;
+
+        // X axis
+        if (!world.isSolid((int)(nx), ey, (int)(pz))) px = nx;
+        // Z axis
+        if (!world.isSolid((int)(px), ey, (int)(nz))) pz = nz;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Renderer  (DDA raycaster, column by column)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    void renderFrame() {
+        drawBackground();
+
+        for (int col = 0; col < SW; col++) {
+
+            // Ray angle for this screen column
+            double rayAngle = angle - FOV / 2.0 + (FOV * col) / SW;
+            double rdx = Math.sin(rayAngle);
+            double rdz = Math.cos(rayAngle);
+
+            // DDA setup
+            double posX = px;
+            double posZ = pz;
+
+            int mapX = (int) posX;
+            int mapZ = (int) posZ;
+
+            double deltaDistX = Math.abs(rdx) < 1e-10 ? 1e30 : Math.abs(1.0 / rdx);
+            double deltaDistZ = Math.abs(rdz) < 1e-10 ? 1e30 : Math.abs(1.0 / rdz);
+
+            double sideDistX, sideDistZ;
+            int stepX, stepZ;
+
+            if (rdx < 0) { stepX = -1; sideDistX = (posX - mapX) * deltaDistX; }
+            else          { stepX =  1; sideDistX = (mapX + 1.0 - posX) * deltaDistX; }
+            if (rdz < 0) { stepZ = -1; sideDistZ = (posZ - mapZ) * deltaDistZ; }
+            else          { stepZ =  1; sideDistZ = (mapZ + 1.0 - posZ) * deltaDistZ; }
+
+            // Walk the ray through the voxel column heights
+            boolean hit     = false;
+            boolean sideHit = false;  // true = X-side wall, false = Z-side wall
+            Color   hitColor = Color.GRAY;
+            double  perpDist = 1.0;
+
+            int maxSteps = world.worldCellsX + world.worldCellsZ;
+            for (int step = 0; step < maxSteps && !hit; step++) {
+                if (sideDistX < sideDistZ) {
+                    sideDistX += deltaDistX;
+                    mapX      += stepX;
+                    sideHit    = true;
                 } else {
-                    cx=wx-blockOX;
-                    cz=wy-blockOY;
+                    sideDistZ += deltaDistZ;
+                    mapZ      += stepZ;
+                    sideHit    = false;
                 }
-                cx=Math.max(0,Math.min(CPB-1,cx));
-                cz=Math.max(0,Math.min(CPB-1,cz));
 
-                int[] span=block.solidRowSpan(cx,cz);
-                if(span[0]==-1){ hitSolid=false; continue; }
+                // Check every height layer at this (mapX, mapZ) column
+                for (int y = WorldBuilder.WORLD_HEIGHT - 1; y >= 0; y--) {
+                    if (world.isSolid(mapX, y, mapZ)) {
+                        hit      = true;
+                        hitColor = world.getColor(mapX, y, mapZ);
 
-                float distB=(float)Math.max(0.05,1.0-dist/fDepth);
-                double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0;
-                double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
-                float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
-                int wallH=Math.max(1,(int)(nScreenHeight/dist));
-                int sliceH=Math.max(1,wallH/CPB);
-                int blockTop=nScreenHeight/2-wallH/2;
-                int screenTop   =blockTop+span[0]*sliceH;
-                int screenBottom=blockTop+(span[1]+1)*sliceH;
-                for(int sy=screenTop;sy<screenBottom;sy++){
-                    if(sy<0||sy>=nScreenHeight) continue;
-                    int vRow=span[0]+(int)(((sy-screenTop)/(double)(screenBottom-screenTop))*(span[1]-span[0]+1));
-                    vRow=Math.max(0,Math.min(CPB-1,vRow));
-                    int base=160-(vRow*12);
-                    int r=(int)(base*brightness);
-                    int g=(int)((base*0.55)*brightness);
-                    int b=(int)((base*0.25)*brightness);
-                    r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
-                    offscreen.setRGB(x,sy,(r<<16)|(g<<8)|b);
+                        // Perpendicular distance (corrects fish-eye)
+                        perpDist = sideHit
+                            ? (mapX - posX + (1 - stepX) / 2.0) / rdx
+                            : (mapZ - posZ + (1 - stepZ) / 2.0) / rdz;
+
+                        // Draw the wall column
+                        drawWallColumn(col, perpDist, y, hitColor, sideHit);
+                        break;
+                    }
                 }
             }
         }
-        double minD=fDepth;
-        for(int ri=-2;ri<=2;ri++){double ra=fPlayerAngle+ri*0.15,rx=Math.cos(ra),ry=Math.sin(ra),rd=0;while(rd<1.5){rd+=0.01;if(getRawCell((int)(fPlayerX+rx*rd),(int)(fPlayerY+ry*rd))!=cLightnessCell){minD=Math.min(minD,rd);break;}}}
-        float pa=(float)Math.max(0,Math.min(1,1.0-minD/0.5));
-        if(pa>0.01f)for(int py=0;py<nScreenHeight;py++)for(int px=0;px<nScreenWidth;px++){int col=offscreen.getRGB(px,py);offscreen.setRGB(px,py,(((int)(((col>>16)&0xFF)*(1-pa)))<<16)|(((int)(((col>>8)&0xFF)*(1-pa)))<<8)|((int)((col&0xFF)*(1-pa))));}
-        offG.drawImage(offscreen,0,0,null); drawHUD(offG);
     }
 
-    private void drawHUD(Graphics2D g){
-        g.setColor(new Color(180,180,180,200));g.setFont(new Font("Courier New",Font.PLAIN,11));g.drawString(String.format("FPS: %.0f",fps),10,20);
-        int cx=nScreenWidth/2,cy=nScreenHeight/2;g.setColor(new Color(255,255,255,180));
-        g.drawLine(cx-12,cy,cx-4,cy);g.drawLine(cx+4,cy,cx+12,cy);g.drawLine(cx,cy-12,cx,cy-4);g.drawLine(cx,cy+4,cx,cy+12);
-        g.setColor(new Color(150,150,150,180));g.setFont(new Font("Courier New",Font.PLAIN,11));
-        g.drawString("WASD/Arrows: Move | Q/E: Strafe | R: Restart",10,nScreenHeight-10);
-        drawMiniMap(g);
-        if(bGameOver){g.setColor(new Color(180,0,0,200));g.fillRect(0,0,nScreenWidth,nScreenHeight);g.setColor(Color.RED);g.setFont(new Font("Courier New",Font.BOLD,80));g.drawString("YOU DIED",nScreenWidth/2-230,nScreenHeight/2);g.setColor(Color.WHITE);g.setFont(new Font("Courier New",Font.PLAIN,24));g.drawString("Press R to restart",nScreenWidth/2-120,nScreenHeight/2+60);}
+    /** Draw one vertical wall strip at screen column `col`. */
+    void drawWallColumn(int col, double perpDist, int cellY, Color baseColor, boolean xSide) {
+        if (perpDist <= 0) perpDist = 0.001;
+
+        // Wall height on screen scales inversely with distance
+        // cellY contributes vertical offset (higher cells appear higher on screen)
+        double wallHeight = SH / perpDist;
+
+        // Vertical screen bounds for this cell layer
+        int drawStart = (int)(SH / 2.0 - wallHeight / 2.0
+                             + (WorldBuilder.WORLD_HEIGHT / 2.0 - cellY) * wallHeight / WorldBuilder.WORLD_HEIGHT);
+        int drawEnd   = drawStart + (int)(wallHeight / WorldBuilder.WORLD_HEIGHT);
+
+        // Shade: darken X-side walls to give depth cue
+        float shade = xSide ? 0.65f : 1.0f;
+        // Distance fog
+        float fog   = (float) Math.max(0.1, 1.0 - perpDist / 60.0);
+        float r     = (baseColor.getRed()   / 255f) * shade * fog;
+        float g     = (baseColor.getGreen() / 255f) * shade * fog;
+        float b     = (baseColor.getBlue()  / 255f) * shade * fog;
+
+        int rgb = toRGB(r, g, b);
+
+        int yStart = Math.max(0, drawStart);
+        int yEnd   = Math.min(SH - 1, drawEnd);
+        for (int y = yStart; y <= yEnd; y++) {
+            pixels[y * SW + col] = rgb;
+        }
     }
 
-    private void drawMiniMap(Graphics2D g){
-        int cPx=8,mW=BiomeSystem.WORLD_COLS*cPx,mH=BiomeSystem.WORLD_ROWS*cPx,oX=nScreenWidth-mW-10,oY=10;
-        g.setColor(new Color(0,0,0,160));g.fillRect(oX-2,oY-2,mW+4,mH+4);
-        for(int row=0;row<BiomeSystem.WORLD_ROWS;row++)for(int col=0;col<BiomeSystem.WORLD_COLS;col++){String bi=biomes.getBiomeName(col,row);g.setColor(bi.equals("bushland")?new Color(180,200,80):bi.equals("treeland")?new Color(60,160,60):bi.equals("testland")?new Color(200,100,200):new Color(30,100,30));g.fillRect(oX+col*cPx,oY+row*cPx,cPx-1,cPx-1);}
-        int px=oX+(int)(fPlayerX/BiomeSystem.CHUNK_SIZE*cPx),py=oY+(int)(fPlayerY/BiomeSystem.CHUNK_SIZE*cPx);
-        g.setColor(Color.WHITE);g.fillOval(px-2,py-2,5,5);g.setColor(Color.YELLOW);g.drawLine(px,py,(int)(px+Math.cos(fPlayerAngle)*6),(int)(py+Math.sin(fPlayerAngle)*6));
-        g.setFont(new Font("Courier New",Font.PLAIN,9));
-        g.setColor(new Color(180,200,80));g.fillRect(oX,oY+mH+4,8,8);g.setColor(Color.WHITE);g.drawString("Flat",oX+10,oY+mH+12);
-        g.setColor(new Color(60,160,60));g.fillRect(oX,oY+mH+14,8,8);g.setColor(Color.WHITE);g.drawString("Bush",oX+10,oY+mH+22);
-        g.setColor(new Color(30,100,30));g.fillRect(oX,oY+mH+24,8,8);g.setColor(Color.WHITE);g.drawString("Trees",oX+10,oY+mH+32);
+    /** Draw sky gradient and floor gradient into the pixel buffer. */
+    void drawBackground() {
+        int midY = SH / 2;
+        for (int y = 0; y < SH; y++) {
+            int rgb;
+            if (y < midY) {
+                // Sky: gradient from top to horizon
+                float t   = (float) y / midY;
+                float r   = lerp(SKY_TOP.getRed(),   SKY_BTM.getRed(),   t) / 255f;
+                float g   = lerp(SKY_TOP.getGreen(), SKY_BTM.getGreen(), t) / 255f;
+                float b   = lerp(SKY_TOP.getBlue(),  SKY_BTM.getBlue(),  t) / 255f;
+                rgb = toRGB(r, g, b);
+            } else {
+                // Floor: gradient from horizon to bottom
+                float t   = (float)(y - midY) / (SH - midY);
+                float r   = lerp(FLOOR_COL.getRed(),   FLOOR_DARK.getRed(),   t) / 255f;
+                float g   = lerp(FLOOR_COL.getGreen(), FLOOR_DARK.getGreen(), t) / 255f;
+                float b   = lerp(FLOOR_COL.getBlue(),  FLOOR_DARK.getBlue(),  t) / 255f;
+                rgb = toRGB(r, g, b);
+            }
+            for (int x = 0; x < SW; x++) pixels[y * SW + x] = rgb;
+        }
     }
 
-    private void restart(){fPlayerX=20;fPlayerY=11;fPlayerAngle=0;nHealth=100;nAmmo=30;bGameOver=false;bShooting=false;}
-    @Override protected void paintComponent(Graphics g){super.paintComponent(g);g.drawImage(offscreen,0,0,null);}
-    @Override public void keyPressed(KeyEvent e){int c=e.getKeyCode();if(c<256)keys[c]=true;if(c==KeyEvent.VK_R)restart();}
-    @Override public void keyReleased(KeyEvent e){int c=e.getKeyCode();if(c<256)keys[c]=false;}
-    @Override public void keyTyped(KeyEvent e){}
+    // ─────────────────────────────────────────────────────────────────────────
+    // Painting
+    // ─────────────────────────────────────────────────────────────────────────
 
-    public static void main(String[] args){
-        JFrame frame=new JFrame("DOOM-J | Biome World");FPSJFrame game=new FPSJFrame();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);frame.add(game);frame.pack();
-        frame.setResizable(false);frame.setLocationRelativeTo(null);frame.setVisible(true);game.requestFocusInWindow();
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
+        g.drawImage(frameBuffer, 0, 0, null);
+        drawHUD(g);
+    }
+
+    /** Minimal HUD: crosshair + position readout. */
+    void drawHUD(Graphics g) {
+        // Crosshair
+        g.setColor(new Color(255, 255, 255, 180));
+        int cx = SW / 2, cy = SH / 2;
+        g.drawLine(cx - 8, cy, cx + 8, cy);
+        g.drawLine(cx, cy - 8, cx, cy + 8);
+
+        // Coordinates
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Monospaced", Font.PLAIN, 11));
+        g.drawString(String.format("X:%.1f  Z:%.1f  Angle:%.1f°", px, pz, Math.toDegrees(angle)), 8, 16);
+        g.drawString("WASD/Arrows=move  Q/E=strafe  R=respawn", 8, SH - 8);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Key listeners
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Override public void keyPressed (KeyEvent e) { keys[e.getKeyCode()] = true;  }
+    @Override public void keyReleased(KeyEvent e) { keys[e.getKeyCode()] = false; }
+    @Override public void keyTyped   (KeyEvent e) {}
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Utilities
+    // ─────────────────────────────────────────────────────────────────────────
+
+    static int toRGB(float r, float g, float b) {
+        int ri = (int)(Math.min(1, Math.max(0, r)) * 255);
+        int gi = (int)(Math.min(1, Math.max(0, g)) * 255);
+        int bi = (int)(Math.min(1, Math.max(0, b)) * 255);
+        return (ri << 16) | (gi << 8) | bi;
+    }
+
+    static float lerp(int a, int b, float t) {
+        return a + (b - a) * t;
     }
 }
