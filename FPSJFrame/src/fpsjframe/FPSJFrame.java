@@ -30,7 +30,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
     // ── movement / look ──────────────────────────────────────────────────────
 
-    static final double MOVE_SPEED   = 0.35;
+    static final double MOVE_SPEED   = 0.7;
     static final double TURN_SPEED   = 0.04;
     static final double STRAFE_SPEED = 0.28;
     static final double EYE_HEIGHT   = 10;     // cells above y = 0
@@ -163,8 +163,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
         if (keys[KeyEvent.VK_W] || keys[KeyEvent.VK_UP])    tryMove( Math.sin(angle) * speed,  Math.cos(angle) * speed);
         if (keys[KeyEvent.VK_S] || keys[KeyEvent.VK_DOWN])  tryMove(-Math.sin(angle) * speed, -Math.cos(angle) * speed);
-        if (keys[KeyEvent.VK_Q])                             tryMove( Math.cos(angle) * strafe, -Math.sin(angle) * strafe);
-        if (keys[KeyEvent.VK_E])                             tryMove(-Math.cos(angle) * strafe,  Math.sin(angle) * strafe);
+        if (keys[KeyEvent.VK_Q])                             tryMove(-Math.cos(angle) * strafe,  Math.sin(angle) * strafe);
+        if (keys[KeyEvent.VK_E])                             tryMove( Math.cos(angle) * strafe, -Math.sin(angle) * strafe);
         if (keys[KeyEvent.VK_A] || keys[KeyEvent.VK_LEFT])  angle -= TURN_SPEED;
         if (keys[KeyEvent.VK_D] || keys[KeyEvent.VK_RIGHT]) angle += TURN_SPEED;
         if (keys[KeyEvent.VK_R])                             respawn();
