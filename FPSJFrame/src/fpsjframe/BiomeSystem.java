@@ -10,7 +10,7 @@ public class BiomeSystem {
     public static final int WORLD_H = WORLD_ROWS * CHUNK_SIZE;
 
     public final Envelope.WorldEnvelope worldMap;
-    public final Envelope.ChunkEnvelope chunkFlat, chunkBush, chunkTree;
+    public final Envelope.ChunkEnvelope chunkFlat, chunkBush, chunkTree, chunkTest;
 
     public BiomeSystem(String mapsDir) {
         try {
@@ -21,12 +21,18 @@ public class BiomeSystem {
         } catch (IOException e) {
             throw new RuntimeException("Failed to load map files from: " + mapsDir, e);
         }
+
+        // chunkTest: dynamic — generated from TreeAscii, not a file
+        // air='0'->0=dirt, tree='1'->1=bush
+        TreeAscii ta = new TreeAscii(CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, CHUNK_SIZE, '0', '1');
+        chunkTest = new Envelope.ChunkEnvelope("chunkTest", ta.grid, 0, "dirt", 1, "bush");
     }
 
     public Envelope getChunk(int worldCol, int worldRow) {
         switch (worldMap.readAt(worldCol, worldRow)) {
             case "bushland": return chunkBush;
             case "treeland": return chunkTree;
+            case "testland": return chunkTest;
             default:         return chunkFlat;
         }
     }

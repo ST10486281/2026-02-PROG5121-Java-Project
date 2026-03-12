@@ -20,7 +20,7 @@ import java.util.*;
 public abstract class Envelope {
 
     // ── GLOBAL ENTITY REGISTRY ────────────────────────────────────
-    public static final Set<String> BIOME_ENTITIES = Set.of("flatland", "bushland", "treeland");
+    public static final Set<String> BIOME_ENTITIES = Set.of("flatland", "bushland", "treeland", "testland");
     public static final Set<String> TILE_ENTITIES  = Set.of("dirt", "bush", "tree");
 
     // ── COVER ─────────────────────────────────────────────────────
@@ -129,6 +129,17 @@ public abstract class Envelope {
         }
         ChunkEnvelope(String name, int[][] contents, Map<Integer,String> legend) {
             super(name, contents, TILE_ENTITIES, legend);
+        }
+        /** Accept a char[][] directly — char digit value: '0'->0, '1'->1, etc. */
+        public ChunkEnvelope(String name, char[][] charGrid, Object... legendEntries) {
+            super(name, toInt(charGrid), TILE_ENTITIES, legendEntries);
+        }
+        private static int[][] toInt(char[][] g) {
+            int[][] out = new int[g.length][g[0].length];
+            for (int y = 0; y < g.length; y++)
+                for (int x = 0; x < g[0].length; x++)
+                    out[y][x] = g[y][x] - '0';
+            return out;
         }
     }
 }
