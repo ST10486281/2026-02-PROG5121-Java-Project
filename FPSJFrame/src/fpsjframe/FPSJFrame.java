@@ -34,6 +34,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     static final double TURN_SPEED  = 0.04;
     static final double STRAFE_SPEED = 0.09;
     static final double EYE_HEIGHT  = 4.0;   // cells above y = 0
+    static final double CELL_SCALE  = 2.0;   // projected cell size (1.0=original, 0.5=half)
 
     // ── player state ─────────────────────────────────────────────────────────
 
@@ -234,7 +235,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 if (perpDist <= 0) perpDist = 0.001;
 
                 // How many pixels tall is one cell at this distance?
-                double cellScreenH = (double) SH / (WorldBuilder.WORLD_HEIGHT * perpDist);
+                double cellScreenH = (double) SH / (WorldBuilder.WORLD_HEIGHT * perpDist) * CELL_SCALE;
 
                 // Screen Y of the bottom of y=0 (ground level).
                 // Horizon is at SH/2; eye is EYE_HEIGHT cells above ground.
