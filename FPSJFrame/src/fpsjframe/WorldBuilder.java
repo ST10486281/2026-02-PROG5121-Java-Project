@@ -27,6 +27,7 @@ public class WorldBuilder {
 
     public final int worldCellsX;
     public final int worldCellsZ;
+    public String[][] chunkNames;  // chunkNames[row][col] → chunk name
     public static final int OBJ_SIZE     = 20;  // cells per object side
     public static final int WORLD_HEIGHT = OBJ_SIZE;
 
@@ -92,6 +93,7 @@ public class WorldBuilder {
 
         int worldRows = worldNames.length;
         int worldCols = worldNames[0].length;
+        chunkNames = worldNames;  // expose for minimap
 
         ChunkLayout[][] worldGrid = new ChunkLayout[worldRows][worldCols];
         for (int r = 0; r < worldRows; r++) {

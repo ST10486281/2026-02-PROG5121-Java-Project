@@ -57,6 +57,16 @@ public class HUD {
 
     // ── minimap ───────────────────────────────────────────────────────────────
 
+    /** Map a chunk type name to a distinct minimap colour. */
+    private static Color chunkColour(String name) {
+        switch (name) {
+            case "chunkFlat":  return new Color( 90,  65,  40);  // brown dirt
+            case "chunkBush":  return new Color( 50, 110,  40);  // medium green
+            case "chunkTree":  return new Color( 25,  70,  20);  // dark forest green
+            default:           return new Color( 60,  60,  60);  // grey unknown
+        }
+    }
+
     private void drawMinimap(Graphics2D g2, double px, double pz, double angle, int sw) {
         int chunkCells = WorldBuilder.OBJ_SIZE * 10;   // cells per chunk (10 objects wide)
         int numChunksX = world.worldCellsX / chunkCells;
@@ -76,16 +86,12 @@ public class HUD {
                 int tx = mx + cx * chunkPx;
                 int tz = mz + cz * chunkPx;
 
-                // Sample the topmost solid cell near the chunk centre for colour
-                int sampleX = cx * chunkCells + chunkCells / 2;
-                int sampleZ = cz * chunkCells + chunkCells / 2;
-                Color fill  = new Color(40, 60, 40);
-                for (int y = WorldBuilder.WORLD_HEIGHT - 1; y >= 0; y--) {
-                    if (world.isSolid(sampleX, y, sampleZ)) {
-                        fill = world.getColor(sampleX, y, sampleZ).darker();
-                        break;
-                    }
-                }
+                // Colour chunk tile directly by chunk type name
+                String chunkName = (world.chunkNames != null
+                        && cz < world.chunkNames.length
+                        && cx < world.chunkNames[cz].length)
+                        ? world.chunkNames[cz][cx] : "";
+                Color fill = chunkColour(chunkName);
 
                 g2.setColor(fill);
                 g2.fillRect(tx, tz, chunkPx - 1, chunkPx - 1);
