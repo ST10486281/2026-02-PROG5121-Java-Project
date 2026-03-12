@@ -117,7 +117,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     private void drawMiniMap(Graphics2D g){
         int cPx=8,mW=BiomeSystem.WORLD_COLS*cPx,mH=BiomeSystem.WORLD_ROWS*cPx,oX=nScreenWidth-mW-10,oY=10;
         g.setColor(new Color(0,0,0,160));g.fillRect(oX-2,oY-2,mW+4,mH+4);
-        for(int row=0;row<BiomeSystem.WORLD_ROWS;row++)for(int col=0;col<BiomeSystem.WORLD_COLS;col++){int bi=biomes.getBiome(col,row);g.setColor(bi==1?new Color(180,200,80):bi==2?new Color(60,160,60):new Color(30,100,30));g.fillRect(oX+col*cPx,oY+row*cPx,cPx-1,cPx-1);}
+        for(int row=0;row<BiomeSystem.WORLD_ROWS;row++)for(int col=0;col<BiomeSystem.WORLD_COLS;col++){String bi=biomes.getBiomeName(col,row);g.setColor(bi.equals("bushland")?new Color(180,200,80):bi.equals("treeland")?new Color(60,160,60):new Color(30,100,30));g.fillRect(oX+col*cPx,oY+row*cPx,cPx-1,cPx-1);}
         int px=oX+(int)(fPlayerX/BiomeSystem.CHUNK_SIZE*cPx),py=oY+(int)(fPlayerY/BiomeSystem.CHUNK_SIZE*cPx);
         g.setColor(Color.WHITE);g.fillOval(px-2,py-2,5,5);g.setColor(Color.YELLOW);g.drawLine(px,py,(int)(px+Math.cos(fPlayerAngle)*6),(int)(py+Math.sin(fPlayerAngle)*6));
         g.setFont(new Font("Courier New",Font.PLAIN,9));
