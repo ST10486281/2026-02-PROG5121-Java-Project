@@ -1,14 +1,18 @@
 package fpsjframe;
 
 /**
- * Simple 2-level tree: stem → 4 branches → done.
- * No recursion beyond one branch tier.
+ * Stem → 3 branches at 120° yaw, each pitching outward from trunk → each splits same way
  *
- * Axiom: FFFFFA
- * Rule A: [1+FFFB][2+FFFB][3+FFFB][4+FFFB]
- * Rule B: FF   ← just a short tip, terminates
+ * Key fix: yaw FIRST with world-Y presets (1/2/3 = 0/120/240°), THEN pitch outward (+)
+ * This ensures each branch leans away from trunk in its own compass direction,
+ * not all leaning the same world-space way.
  *
- * iterations=1 so the rule fires exactly once — one tier of branches only.
+ * Rule A: 3-way split using world-Y yaw symbols then pitch up-and-out
+ *   [1+FFFA]  = face 0°,   lean out 25°, grow FFF, recurse
+ *   [2+FFFA]  = face 120°, lean out 25°, grow FFF, recurse
+ *   [3+FFFA]  = face 240°, lean out 25°, grow FFF, recurse
+ *
+ * iterations=2 → self-similar: each branch tip splits into 3 the same way
  */
 public class LSystemTreeEnvelopeGenerator {
 
@@ -16,12 +20,11 @@ public class LSystemTreeEnvelopeGenerator {
         return LSystem.generate(
             new LSystem.Params()
                 .axiom("FFFFFFA")
-                .rule('A', "[1+FFFFB][2+FFFFB][3+FFFFB][4+FFFFB]")
-                .rule('B', "FFF")
-                .iterations(1)          // exactly one branch tier, ignore iterations arg
-                .branchAngle(55)
-                .widthRatio(0.50)
-                .trunkThickness(0)      // thinnest possible — 1-voxel lines
+                .rule('A', "[1+FFFA][2+FFFA][3+FFFA]")
+                .iterations(2)
+                .branchAngle(28)
+                .widthRatio(0.75)
+                .trunkThickness(0)
                 .objectName("objectTree")
                 .solidLabel("tree"),
             size, size, 'O', '#');
@@ -29,6 +32,6 @@ public class LSystemTreeEnvelopeGenerator {
 
     public static void main(String[] args) {
         int size = args.length > 0 ? Integer.parseInt(args[0]) : 20;
-        System.out.print(generate(size, 1));
+        System.out.print(generate(size, 2));
     }
 }
