@@ -47,6 +47,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     // ── world ────────────────────────────────────────────────────────────────
 
     WorldBuilder world;
+    HUD hud;
 
     // ── rendering ────────────────────────────────────────────────────────────
 
@@ -98,6 +99,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         String envelopeDir = System.getProperty("envelopes", "envelopes");
         try {
             world = new WorldBuilder(envelopeDir);
+            hud   = new HUD(world);
         } catch (Exception e) {
             System.err.println("Failed to load world: " + e.getMessage());
             e.printStackTrace();
@@ -322,22 +324,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         g.drawImage(frameBuffer, 0, 0, null);
-        drawHUD(g);
-    }
-
-    /** Minimal HUD: crosshair + position readout. */
-    void drawHUD(Graphics g) {
-        // Crosshair
-        g.setColor(new Color(255, 255, 255, 180));
-        int cx = SW / 2, cy = SH / 2;
-        g.drawLine(cx - 8, cy, cx + 8, cy);
-        g.drawLine(cx, cy - 8, cx, cy + 8);
-
-        // Coordinates
-        g.setColor(Color.WHITE);
-        g.setFont(new Font("Monospaced", Font.PLAIN, 11));
-        g.drawString(String.format("X:%.1f  Z:%.1f  Angle:%.1f°", px, pz, Math.toDegrees(angle)), 8, 16);
-        g.drawString("WASD/Arrows=move  Q/E=strafe  R=respawn", 8, SH - 8);
+        hud.draw(g, px, pz, angle, SW, SH);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
