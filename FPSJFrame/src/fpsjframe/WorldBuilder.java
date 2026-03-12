@@ -123,7 +123,7 @@ public class WorldBuilder {
             for (int chunkCol = 0; chunkCol < worldCols; chunkCol++) {
 
                 ChunkLayout chunk = worldGrid[chunkRow][chunkCol];
-                int chunkOriginX  = chunkCol * cellsPerChunkX;
+                int chunkOriginX  = (worldCols - 1 - chunkCol) * cellsPerChunkX;
                 int chunkOriginZ  = chunkRow * cellsPerChunkZ;
 
                 for (int objCol = 0; objCol < chunk.cols; objCol++) {

@@ -170,11 +170,15 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         if (keys[KeyEvent.VK_R])                             respawn();
     }
 
-    /** Move with simple axis-separated collision. */
+    /** Move with simple axis-separated collision and world boundary clamping. */
     void tryMove(double dx, double dz) {
         double nx = px + dx;
         double nz = pz + dz;
         int ey    = (int) EYE_HEIGHT;
+
+        // Clamp to world bounds (keep 1 cell margin so raycaster never goes OOB)
+        nx = Math.max(1, Math.min(world.worldCellsX - 2, nx));
+        nz = Math.max(1, Math.min(world.worldCellsZ - 2, nz));
 
         // X axis
         if (!world.isSolid((int)(nx), ey, (int)(pz))) px = nx;

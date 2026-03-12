@@ -133,16 +133,16 @@ public class HUD {
             }
         }
 
-        // Player position — px/pz are in cells, one chunk = OBJ_SIZE*10 cells
-        int chunkCells = WorldBuilder.OBJ_SIZE * 10;
-        int dotX = ox + (int)(px / chunkCells * CHUNK_PX);
-        int dotZ = oy + (int)(pz / chunkCells * CHUNK_PX);
+        // Player position — map fraction of total world cells onto total map pixels
+        // World X is mirrored (worldCols-1-col stamping), so flip dotX too
+        int dotX = ox + (int)(((world.worldCellsX - px) / world.worldCellsX) * mapW);
+        int dotZ = oy + (int)((pz / world.worldCellsZ) * mapH);
 
         // Direction arrow
         g2.setColor(Color.YELLOW);
         g2.drawLine(dotX, dotZ,
-                dotX + (int)(Math.sin(angle) * 8),
-                dotZ + (int)(Math.cos(angle) * 8));
+                dotX + (int)(Math.sin(-angle) * 8),
+                dotZ + (int)(Math.cos(-angle) * 8));
 
         // Player dot
         g2.setColor(Color.WHITE);
