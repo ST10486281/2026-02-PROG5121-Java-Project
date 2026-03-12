@@ -4,55 +4,70 @@ import java.io.*;
 import java.util.*;
 
 /**
- * BlockEnvelope — a 3D block defined as 8 vertical columns, each 8 cells tall.
- * Columns run left-to-right (col 0 = leftmost face).
- * Each column is 8 rows top-to-bottom.
+ * BlockEnvelope — a 3D block defined as 8 vertical column slices, left to right.
  *
- * File format (.envelope):
- *   name: bushBlock
- *   type: block
- *   legend: 0=air 1=dirt
- *   ---
- *   00000000   <- column 0, rows 0-7 (top to bottom)
+ * File format:
+ *   Each === section = one left-to-right column slice (col 0=leftmost, col 7=rightmost)
+ *   Each line within = one vertical level (row 0=top, row 7=bottom)
+ *   Each char on that line = depth cell in that row (front to back)
+ *   '1' or '#' = solid, '0' = air
+ *
+ * Example minecraft tree (section = one left-right slice):
+ *   11111111   <- row 0 (top): all 8 depth positions solid = full canopy row
+ *   11111111
+ *   11111111
+ *   00000000   <- row 3: all air
+ *   000##000   <- row 4: only middle depth positions have trunk
  *   ...
- *   ===        <- separator between columns
- *   00011000   <- column 1
- *   ...
+ *
+ * isSolid(col, row, depth): is the voxel at left-right=col, vertical=row, depth=depth solid?
+ * For 2.5D rendering: isSolid(col, depth) checks if the ray's depth position hits solid at this row,
+ * then renders the full vertical span of solid rows in that column.
  */
 public class BlockEnvelope {
 
-    public static final int SIZE = 8; // fixed 8x8 per column
+    public static final int SIZE = 8;
 
     public final String name;
-    // columns[col][row] — col=0..7, row=0..7
-    public final boolean[][] columns; // true = solid (dirt), false = air
+    // voxels[col][row][depth] — true = solid
+    public final boolean[][][] voxels;
 
-    private BlockEnvelope(String name, boolean[][] columns) {
-        this.name    = name;
-        this.columns = columns;
+    private BlockEnvelope(String name, boolean[][][] voxels) {
+        this.name   = name;
+        this.voxels = voxels;
     }
 
-    /** Is cell (col, row) solid? */
-    public boolean isSolid(int col, int row) {
-        if (col < 0 || col >= SIZE || row < 0 || row >= SIZE) return false;
-        return columns[col][row];
+    /** Is voxel at (col, row, depth) solid? */
+    public boolean isSolid(int col, int row, int depth) {
+        if (col<0||col>=SIZE||row<0||row>=SIZE||depth<0||depth>=SIZE) return false;
+        return voxels[col][row][depth];
     }
 
-    /** How many rows are solid in a given column (used to derive height). */
-    public int solidRows(int col) {
-        if (col < 0 || col >= SIZE) return 0;
-        int count = 0;
-        for (int r = 0; r < SIZE; r++) if (columns[col][r]) count++;
-        return count;
+    /** Does this column slice at this depth have ANY solid voxel (used for hit detection)? */
+    public boolean hasAnySolid(int col, int depth) {
+        if (col<0||col>=SIZE||depth<0||depth>=SIZE) return false;
+        for (int row=0; row<SIZE; row++) if (voxels[col][row][depth]) return true;
+        return false;
     }
 
-    /** Load a block envelope from a .envelope file. */
+    /** Get the topmost and bottommost solid row for column+depth (for rendering span). */
+    public int[] solidRowSpan(int col, int depth) {
+        int top=-1, bot=-1;
+        for (int row=0; row<SIZE; row++) {
+            if (voxels[col][row][depth]) {
+                if (top==-1) top=row;
+                bot=row;
+            }
+        }
+        return new int[]{top, bot};
+    }
+
     public static BlockEnvelope load(String path) throws IOException {
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String name = null;
-            char airChar = '0', solidChar = '1';
-            List<boolean[]> cols = new ArrayList<>();
-            List<String> currentColLines = new ArrayList<>();
+            // sections[col] -> list of lines (each line = one row, chars = depth)
+            List<List<String>> sections = new ArrayList<>();
+            List<String> current = new ArrayList<>();
             boolean inGrid = false;
 
             String line;
@@ -61,80 +76,51 @@ public class BlockEnvelope {
                 if (!inGrid) {
                     if (line.equals("---")) { inGrid = true; continue; }
                     if (line.startsWith("name:")) name = line.substring(5).trim();
-                    if (line.startsWith("legend:")) {
-                        for (String token : line.substring(7).trim().split("\\s+")) {
-                            String[] kv = token.split("=");
-                            char k = kv[0].charAt(0);
-                            if (kv[1].equals("air"))  airChar   = k;
-                            if (kv[1].equals("dirt")) solidChar = k;
-                        }
-                    }
                 } else {
-                    if (line.equals("===") || line.isEmpty()) {
-                        if (!currentColLines.isEmpty()) {
-                            cols.add(parseColumn(currentColLines, solidChar));
-                            currentColLines.clear();
-                        }
-                    } else {
-                        currentColLines.add(line);
+                    if (line.equals("===")) {
+                        sections.add(new ArrayList<>(current));
+                        current.clear();
+                    } else if (!line.isEmpty()) {
+                        current.add(line);
                     }
                 }
             }
-            // flush last column
-            if (!currentColLines.isEmpty())
-                cols.add(parseColumn(currentColLines, solidChar));
+            if (!current.isEmpty()) sections.add(current);
 
-            // pad to SIZE columns if fewer provided
-            while (cols.size() < SIZE) cols.add(new boolean[SIZE]);
-
-            return new BlockEnvelope(name, cols.toArray(new boolean[0][]));
+            boolean[][][] vox = new boolean[SIZE][SIZE][SIZE];
+            for (int col=0; col<Math.min(sections.size(),SIZE); col++) {
+                List<String> rows = sections.get(col);
+                for (int row=0; row<Math.min(rows.size(),SIZE); row++) {
+                    String ln = rows.get(row);
+                    for (int depth=0; depth<Math.min(ln.length(),SIZE); depth++) {
+                        char c = ln.charAt(depth);
+                        vox[col][row][depth] = (c=='1'||c=='#');
+                    }
+                }
+            }
+            return new BlockEnvelope(name, vox);
         }
     }
 
-    private static boolean[] parseColumn(List<String> lines, char solidChar) {
-        boolean[] col = new boolean[SIZE];
-        for (int r = 0; r < Math.min(lines.size(), SIZE); r++)
-            if (r < lines.size() && lines.get(r).length() > 0)
-                col[r] = lines.get(r).charAt(0) == solidChar;
-        return col;
-    }
-
-    /** Hardcoded bush block — roughly round blob shape. */
     public static BlockEnvelope makeBush() {
-        // Each column: which of 8 rows are solid (top=0, bottom=7)
-        String[] cols = {
-            "00011000",
-            "00111100",
-            "01111110",
-            "01111110",
-            "01111110",
-            "01111110",
-            "00111100",
-            "00011000",
-        };
-        return fromStrings("bushBlock", cols);
+        // round blob — solid middle columns and rows
+        String[] rows = { "00000000","00111100","01111110","01111110",
+                          "01111110","01111110","00111100","00000000" };
+        return fromCols("bushBlock", new String[][]{rows,rows,rows,rows,rows,rows,rows,rows});
     }
 
-    /** Hardcoded tree block — tall trunk with canopy. */
     public static BlockEnvelope makeTree() {
-        String[] cols = {
-            "00011000",
-            "00111100",
-            "01111110",
-            "11111111",
-            "11111111",
-            "01111110",
-            "00111100",
-            "00011000",
-        };
-        return fromStrings("treeBlock", cols);
+        String[] canopy = {"11111111","11111111","11111111","00000000","00000000","00000000","00000000","00000000"};
+        String[] trunk  = {"11111111","11111111","11111111","00011000","00011000","00011000","00011000","00000000"};
+        return fromCols("treeBlock", new String[][]{canopy,canopy,canopy,trunk,trunk,canopy,canopy,canopy});
     }
 
-    private static BlockEnvelope fromStrings(String name, String[] colStrs) {
-        boolean[][] cols = new boolean[SIZE][SIZE];
-        for (int c = 0; c < SIZE; c++)
-            for (int r = 0; r < SIZE; r++)
-                cols[c][r] = colStrs[c].charAt(r) == '1';
-        return new BlockEnvelope(name, cols);
+    private static BlockEnvelope fromCols(String name, String[][] colRows) {
+        boolean[][][] vox = new boolean[SIZE][SIZE][SIZE];
+        for (int col=0; col<SIZE; col++)
+            for (int row=0; row<SIZE; row++)
+                for (int depth=0; depth<SIZE; depth++)
+                    vox[col][row][depth] = colRows[col][row].charAt(depth)=='1'||colRows[col][row].charAt(depth)=='#';
+        return new BlockEnvelope(name, vox);
     }
 }

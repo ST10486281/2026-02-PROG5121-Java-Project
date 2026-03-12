@@ -92,33 +92,47 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 double tileX=wx, tileY=wy;
                 double subStep=1.0/BlockEnvelope.SIZE;
                 double entryDist=dist-0.02;
-                for(double sd=entryDist; sd<entryDist+1.5 && !hitSolid; sd+=subStep*0.5){
+                for(double sd=entryDist; sd<entryDist+1.5 && !hitSolid; sd+=subStep*0.25){
                     double sx=fPlayerX+eyeX*sd, sy2=fPlayerY+eyeY*sd;
                     if((int)sx!=wx||(int)sy2!=wy) continue;
                     double fx=sx-tileX, fy=sy2-tileY;
-                    int bCol=(int)(fx*BlockEnvelope.SIZE);
-                    int bRow=(int)(fy*BlockEnvelope.SIZE);
-                    bCol=Math.max(0,Math.min(BlockEnvelope.SIZE-1,bCol));
-                    bRow=Math.max(0,Math.min(BlockEnvelope.SIZE-1,bRow));
-                    if(!block.isSolid(bCol,bRow)) continue;
+                    // bCol = left-right across the visible face (perpendicular to ray)
+                    // depth = how far into the block (parallel to ray)
+                    int bCol, depth;
+                    if(Math.abs(eyeX)>Math.abs(eyeY)){
+                        bCol =(int)(fy*BlockEnvelope.SIZE); // ray in X, face is Y axis
+                        depth=(int)(fx*BlockEnvelope.SIZE);
+                    } else {
+                        bCol =(int)(fx*BlockEnvelope.SIZE); // ray in Y, face is X axis
+                        depth=(int)(fy*BlockEnvelope.SIZE);
+                    }
+                    bCol =Math.max(0,Math.min(BlockEnvelope.SIZE-1,bCol));
+                    depth=Math.max(0,Math.min(BlockEnvelope.SIZE-1,depth));
+                    if(!block.hasAnySolid(bCol,depth)) continue;
+                    // hit — find solid row span and render it
                     hitSolid=true;
+                    int[] span=block.solidRowSpan(bCol,depth);
+                    if(span[0]==-1) continue;
                     float distB=(float)Math.max(0.05,1.0-sd/fDepth);
                     double nx2=(Math.abs(eyeX)>Math.abs(eyeY))?((eyeX>0)?-1:1):0;
                     double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
                     float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
                     int wallH=Math.max(1,(int)(nScreenHeight/sd));
-                    int sliceH=Math.max(1, wallH/BlockEnvelope.SIZE);
-                    int blockTop=nScreenHeight/2 - wallH/2;
-                    int screenTop   =blockTop + bRow*sliceH;
-                    int screenBottom=screenTop + sliceH;
-                    int base=160-(bRow*8);
-                    int r=(int)(base*brightness);
-                    int g=(int)((base*0.55)*brightness);
-                    int b=(int)((base*0.25)*brightness);
-                    r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
-                    int col=(r<<16)|(g<<8)|b;
-                    for(int sy=screenTop;sy<screenBottom;sy++)
-                        if(sy>=0&&sy<nScreenHeight) offscreen.setRGB(x,sy,col);
+                    int sliceH=Math.max(1,wallH/BlockEnvelope.SIZE);
+                    int blockTop=nScreenHeight/2-wallH/2;
+                    int screenTop   =blockTop+span[0]*sliceH;
+                    int screenBottom=blockTop+(span[1]+1)*sliceH;
+                    for(int sy=screenTop;sy<screenBottom;sy++){
+                        if(sy<0||sy>=nScreenHeight) continue;
+                        int vRow=span[0]+(int)(((sy-screenTop)/(double)(screenBottom-screenTop))*(span[1]-span[0]+1));
+                        vRow=Math.max(0,Math.min(BlockEnvelope.SIZE-1,vRow));
+                        int base=160-(vRow*12);
+                        int r=(int)(base*brightness);
+                        int g=(int)((base*0.55)*brightness);
+                        int b=(int)((base*0.25)*brightness);
+                        r=Math.min(255,Math.max(0,r)); g=Math.min(255,Math.max(0,g)); b=Math.min(255,Math.max(0,b));
+                        offscreen.setRGB(x,sy,(r<<16)|(g<<8)|b);
+                    }
                 }
             }
         }
