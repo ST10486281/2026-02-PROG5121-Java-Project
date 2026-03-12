@@ -98,19 +98,19 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 double ny2=(Math.abs(eyeX)>Math.abs(eyeY))?0:((eyeY>0)?-1:1);
                 float brightness=distB*(float)(0.4+0.6*Math.abs(eyeX*nx2+eyeY*ny2));
                 // render each solid row as a voxel slice
+                // wallH = total height if block filled all 8 rows
                 int wallH=(int)(nScreenHeight/dist);
+                int sliceH=Math.max(1, wallH/BlockEnvelope.SIZE);
+                int blockTop=nScreenHeight/2 - wallH/2;
                 for(int bRow=0;bRow<BlockEnvelope.SIZE;bRow++){
                     if(!block.isSolid(bCol,bRow)) continue;
-                    // map bRow to screen vertical band
-                    // row 0=top of block, row SIZE-1=bottom
-                    int sliceH=wallH/BlockEnvelope.SIZE;
-                    int screenTop   =nScreenHeight/2-wallH/2 + bRow*sliceH;
-                    int screenBottom=screenTop+sliceH;
-                    // flat brown dirt colour
-                    int base=160-(bRow*10); // slightly darker lower rows
+                    int screenTop   =blockTop + bRow*sliceH;
+                    int screenBottom=screenTop + sliceH;
+                    // flat brown dirt colour, slightly darker lower rows
+                    int base=160-(bRow*8);
                     int r=(int)(base*brightness);
-                    int g=(int)((base*0.6)*brightness);
-                    int b=(int)((base*0.3)*brightness);
+                    int g=(int)((base*0.55)*brightness);
+                    int b=(int)((base*0.25)*brightness);
                     r=Math.min(255,Math.max(0,r));
                     g=Math.min(255,Math.max(0,g));
                     b=Math.min(255,Math.max(0,b));
