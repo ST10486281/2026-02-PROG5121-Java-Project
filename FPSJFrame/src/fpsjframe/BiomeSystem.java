@@ -20,7 +20,7 @@ public class BiomeSystem {
 
     // ── WORLD MAP ENVELOPE ────────────────────────────────────────
     // cover legend: 0="flatland", 1="bushland", 2="treeland"
-    public final Envelope worldMap = new Envelope(
+    public final Envelope.WorldEnvelope worldMap = new Envelope.WorldEnvelope(
         "worldMap",
         new int[][] {
             { 0, 0, 1, 1, 2, 2 },
@@ -39,7 +39,7 @@ public class BiomeSystem {
     // cover legend: 0="dirt", 1="bush", 2="tree"
 
     // Flatland — all dirt, nothing solid
-    public final Envelope chunkFlat = new Envelope(
+    public final Envelope.ChunkEnvelope chunkFlat = new Envelope.ChunkEnvelope(
         "chunkFlat",
         new int[][] {
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -59,7 +59,7 @@ public class BiomeSystem {
     );
 
     // Bushland — dirt with sparse bushes
-    public final Envelope chunkBush = new Envelope(
+    public final Envelope.ChunkEnvelope chunkBush = new Envelope.ChunkEnvelope(
         "chunkBush",
         new int[][] {
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -79,7 +79,7 @@ public class BiomeSystem {
     );
 
     // Treeland — dirt, some bushes, and trees
-    public final Envelope chunkTree = new Envelope(
+    public final Envelope.ChunkEnvelope chunkTree = new Envelope.ChunkEnvelope(
         "chunkTree",
         new int[][] {
             { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
