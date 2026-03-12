@@ -47,7 +47,8 @@ public class LSystem {
         Map<Character,String> rules = new LinkedHashMap<>();
         int    iterations      = 4;
         double branchAngleDeg  = 35.0;
-        double widthRatio      = 0.4;   // 0.4=tall/narrow, 0.9=wide/bushy
+        double widthRatio      = 0.4;   // XZ spread as fraction of shapeSize
+        int    shapeSize       = -1;    // -1 = fill canvas (old behaviour)
         int    trunkThickness  = -1;    // -1 = auto
         String objectName      = "object";
         String solidLabel      = "solid";
@@ -57,6 +58,9 @@ public class LSystem {
         public Params iterations(int n)            { iterations = n;         return this; }
         public Params branchAngle(double deg)      { branchAngleDeg = deg;   return this; }
         public Params widthRatio(double r)         { widthRatio = r;         return this; }
+        /** How many voxels tall the shape should be (canvas centres it).
+         *  -1 (default) fills the canvas just like before. */
+        public Params shapeSize(int s)             { shapeSize = s;          return this; }
         public Params trunkThickness(int t)        { trunkThickness = t;     return this; }
         public Params objectName(String n)         { objectName = n;         return this; }
         public Params solidLabel(String l)         { solidLabel = l;         return this; }
@@ -192,10 +196,12 @@ public class LSystem {
         double spanY  = maxY-minY;                       if (spanY ==0) spanY =1;
 
         double margin = 1.5;
-        double sY     = (size - margin*2) / spanY;
-        double sXZ    = (size * p.widthRatio) / spanXZ;
+        int    ss     = (p.shapeSize > 0) ? p.shapeSize : size;  // shape budget
+        double sY     = (ss - margin*2) / spanY;
+        double sXZ    = (ss * p.widthRatio) / spanXZ;
+        // centre the shape within the canvas
         double ox     = size/2.0 - ((minX+maxX)/2.0)*sXZ;
-        double oy     = margin   - minY*sY;
+        double oy     = (size - ss)/2.0 + margin - minY*sY;
         double oz     = size/2.0 - ((minZ+maxZ)/2.0)*sXZ;
 
         int thick = p.trunkThickness >= 0 ? p.trunkThickness : Math.max(0, 2-p.iterations);

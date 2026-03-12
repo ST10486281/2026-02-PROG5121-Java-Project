@@ -106,9 +106,10 @@ public class WorldBuilder {
         objectShapes.put("objectTree", parseObject(treeLines));
 
         
+
  
         // ── Inject procedurally generated objectBush (L-System) ──────────────
-        String bushEnvelope = LSystemBushEnvelopeGenerator.generate(20, 3);
+        String bushEnvelope = LSystemBushEnvelopeGenerator.generate(20, 2);
         List<String> bushLines = Arrays.asList(bushEnvelope.split("\\n"));
         objectShapes.put("objectBush", parseObject(bushLines));
 
