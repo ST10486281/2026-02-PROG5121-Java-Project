@@ -3,7 +3,8 @@ package fpsjframe;
 import java.awt.Color;
 import java.io.*;
 import java.util.*;
-
+import fpsjframe.animalgeneration.AnimalLoader;
+import fpsjframe.animalgeneration.AnimalNode;
 /**
  * WorldBuilder
  *
@@ -108,7 +109,16 @@ public class WorldBuilder {
         List<String> horseLines = Arrays.asList(horseEnvelope.split("\n"));
         objectShapes.put("objectHorse", parseObject(horseLines));
 
-             
+        // ── Inject procedurally generated objectGoat ─────────────────────────
+        try {
+            AnimalNode goatRoot = AnimalLoader.load("fpsjframe/animals/goat.txt");
+            String goatEnvelope = AnimalEnvelopeGenerator.generate(goatRoot, 20, 20, 20, 20, "objectGoat");
+            List<String> goatLines = Arrays.asList(goatEnvelope.split("\n"));
+            objectShapes.put("objectGoat", parseObject(goatLines));
+        } catch (Exception e) {
+            System.err.println("Failed to load goat: " + e.getMessage());
+        }
+
 
         if (worldNames == null)
             throw new IOException("No world envelope found.");

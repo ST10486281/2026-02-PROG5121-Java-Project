@@ -1,8 +1,8 @@
 name: worldMap
 type: world
-legend: a=chunkFlat b=chunkBush c=chunkTree
+legend: a=chunkFlat b=chunkBush c=chunkTree d=chunkAnimal
 ---
 cbbacbba
 bacbbacb
-cbbacbba
-bacbbacb
+cbbdcbba
+bacabacb

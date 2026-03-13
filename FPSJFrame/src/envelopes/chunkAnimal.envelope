@@ -1,0 +1,9 @@
+name: chunkAnimal
+type: chunk
+legend: 0=objectDirt c=objectCow h=objectHorse g=objectGoat
+---
+00000
+00h00
+0000g
+00c00
+00000
