@@ -120,6 +120,12 @@ public class WorldBuilder {
         }
 
 
+        AnimalNode babyGoatRoot = AnimalLoader.load("fpsjframe/animals/babygoat.txt");
+        String babyGoatEnvelope = AnimalEnvelopeGenerator.generate(babyGoatRoot, 20, 20, 20, 20, "objectBabyGoat");
+        List<String> babyGoatLines = Arrays.asList(babyGoatEnvelope.split("\n"));
+        objectShapes.put("objectBabyGoat", parseObject(babyGoatLines));
+
+
         if (worldNames == null)
             throw new IOException("No world envelope found.");
 

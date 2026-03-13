@@ -2,7 +2,7 @@ name: worldMap
 type: world
 legend: a=chunkFlat b=chunkBush c=chunkTree d=chunkAnimal
 ---
-cbbacbba
-bacbbacb
+cbbaaaba
+bacbdacb
 cbbdcbba
 bacabacb

@@ -3,7 +3,7 @@
 # Y axis = up/down
 # X axis = left/right
 
-name: goat
+name: babygoat
 
 bone: root         none        abs   0.0   0.5   0.5   abs  1.0   phantom
 
