@@ -1,0 +1,42 @@
+# Animal definition: Goat
+# Spine runs along Z axis (front to back)
+# Y axis = up/down
+# X axis = left/right
+#
+# Format:
+#   bone: <id> <parent> <abs|rel> <x> <y> <z> <abs|rel> <t> [phantom] [flags...]
+
+name: goat
+
+# Root sits in the middle of the grid, mid-height
+bone: root         none        abs   0.0   0.5   0.5   abs  1.0   phantom
+
+# Spine runs front to back along Z
+bone: torso_mid    root        rel   0.0   0.0   0.0   abs  0.55
+bone: torso_front  torso_mid   rel   0.0   0.0   0.4   abs  0.5
+bone: torso_back   torso_mid   rel   0.0   0.0  -0.4   abs  0.48
+
+# Neck rises up and forward from front torso
+bone: neck         torso_front rel   0.0   0.3   0.25  abs  0.22
+bone: head         neck        rel   0.0   0.2   0.2   abs  0.28
+
+# Tail droops back slightly up
+bone: tail         torso_back  rel   0.0   0.1  -0.25  abs  0.1
+
+# Front legs — hang down, spread left/right on X
+bone: leg_hip_fl   torso_front rel  -0.22 -0.25  0.1   abs  0.16  front left
+bone: leg_knee_fl  leg_hip_fl  rel   0.0  -0.35  0.0   abs  0.13
+bone: leg_foot_fl  leg_knee_fl rel   0.0  -0.28  0.0   abs  0.1
+
+bone: leg_hip_fr   torso_front rel   0.22 -0.25  0.1   abs  0.16  front right
+bone: leg_knee_fr  leg_hip_fr  rel   0.0  -0.35  0.0   abs  0.13
+bone: leg_foot_fr  leg_knee_fr rel   0.0  -0.28  0.0   abs  0.1
+
+# Back legs — hang down from back torso
+bone: leg_hip_bl   torso_back  rel  -0.22 -0.25 -0.1   abs  0.16  back left
+bone: leg_knee_bl  leg_hip_bl  rel   0.0  -0.35  0.0   abs  0.13
+bone: leg_foot_bl  leg_knee_bl rel   0.0  -0.28  0.0   abs  0.1
+
+bone: leg_hip_br   torso_back  rel   0.22 -0.25 -0.1   abs  0.16  back right
+bone: leg_knee_br  leg_hip_br  rel   0.0  -0.35  0.0   abs  0.13
+bone: leg_foot_br  leg_knee_br rel   0.0  -0.28  0.0   abs  0.1

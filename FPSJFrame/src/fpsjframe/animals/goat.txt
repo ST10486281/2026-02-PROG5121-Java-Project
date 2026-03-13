@@ -1,35 +1,42 @@
 # Animal definition: Goat
-# Format:
-#   bone: <id> <parent> <abs|rel> <x> <y> <z> <abs|rel> <t> [phantom]
-#   id         = unique bone name
-#   parent     = parent bone id (root has parent "none")
-#   abs|rel    = position is absolute or relative to parent
-#   x y z      = position
-#   abs|rel    = is absolute or relative to parent
-#   t          = value
-#   phantom    = optional, marks bone as invisible (no voxels)
-#   flags      = optional spatial flags: front back left right top bottom
+# Spine runs along Z axis (front to back)
+# Y axis = up/down
+# X axis = left/right
 
 name: goat
 
-bone: root        none    abs  0.0   0.0  0.0   abs  1.0   phantom
-bone: torso       root    abs  0.0   1.0  0.0   abs  0.5
-bone: neck        torso   rel  0.6   0.4  0.0   abs  0.3
-bone: head        neck    rel  0.4   0.1  0.0   abs  0.36
-bone: tail        torso   rel -0.5   0.2  0.0   abs  0.15
+bone: root         none        abs   0.0   0.5   0.5   abs  1.0   phantom
 
-bone: leg_hip_fl  torso   rel  0.4  -0.3  0.25  abs  0.175  front left
-bone: leg_knee_fl leg_hip_fl  rel  0.0  -0.4  0.0   abs  0.14
-bone: leg_foot_fl leg_knee_fl rel  0.0  -0.35 0.0   abs  0.1
+# Longer spine, slimmer cross-section
+bone: torso_mid    root        rel   0.0   0.0   0.0   abs  0.6
+bone: torso_front  torso_mid   rel   0.0   0.0   0.7   abs  0.58
+bone: torso_back   torso_mid   rel   0.0   0.0  -0.7   abs  0.55
 
-bone: leg_hip_fr  torso   rel  0.4  -0.3 -0.25  abs  0.175  front right
-bone: leg_knee_fr leg_hip_fr  rel  0.0  -0.4  0.0   abs  0.14
-bone: leg_foot_fr leg_knee_fr rel  0.0  -0.35 0.0   abs  0.1
+# Neck and head
+bone: neck         torso_front rel   0.0   0.45  0.3   abs  0.35
+bone: head         neck        rel   0.0   0.35  0.25  abs  0.42
 
-bone: leg_hip_bl  torso   rel -0.4  -0.3  0.25  abs  0.175  back left
-bone: leg_knee_bl leg_hip_bl  rel  0.0  -0.4  0.0   abs  0.14
-bone: leg_foot_bl leg_knee_bl rel  0.0  -0.35 0.0   abs  0.1
+# Horns
+bone: horn_left    head        rel  -0.15  0.32  0.05  abs  0.1  left
+bone: horn_right   head        rel   0.15  0.32  0.05  abs  0.1  right
 
-bone: leg_hip_br  torso   rel -0.4  -0.3 -0.25  abs  0.175  back right
-bone: leg_knee_br leg_hip_br  rel  0.0  -0.4  0.0   abs  0.14
-bone: leg_foot_br leg_knee_br rel  0.0  -0.35 0.0   abs  0.1
+# Tail
+bone: tail         torso_back  rel   0.0   0.12 -0.3   abs  0.15
+
+# Front legs — slimmer
+bone: leg_hip_fl   torso_front rel  -0.3  -0.4   0.1   abs  0.22  front left
+bone: leg_knee_fl  leg_hip_fl  rel   0.0  -0.5   0.0   abs  0.18
+bone: leg_foot_fl  leg_knee_fl rel   0.0  -0.42  0.0   abs  0.15
+
+bone: leg_hip_fr   torso_front rel   0.3  -0.4   0.1   abs  0.22  front right
+bone: leg_knee_fr  leg_hip_fr  rel   0.0  -0.5   0.0   abs  0.18
+bone: leg_foot_fr  leg_knee_fr rel   0.0  -0.42  0.0   abs  0.15
+
+# Back legs — slimmer
+bone: leg_hip_bl   torso_back  rel  -0.3  -0.4  -0.1   abs  0.22  back left
+bone: leg_knee_bl  leg_hip_bl  rel   0.0  -0.5   0.0   abs  0.18
+bone: leg_foot_bl  leg_knee_bl rel   0.0  -0.42  0.0   abs  0.15
+
+bone: leg_hip_br   torso_back  rel   0.3  -0.4  -0.1   abs  0.22  back right
+bone: leg_knee_br  leg_hip_br  rel   0.0  -0.5   0.0   abs  0.18
+bone: leg_foot_br  leg_knee_br rel   0.0  -0.42  0.0   abs  0.15
