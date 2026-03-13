@@ -117,123 +117,41 @@ public class WorldBuilder {
         List<String> goatLines = Arrays.asList(goatEnvelope.split("\n"));
         objectShapes.put("objectGoat", parseObject(goatLines));
 
-
         AnimalNode babyGoatRoot = AnimalLoader.load("fpsjframe/animals/babygoat.txt");
         String babyGoatEnvelope = AnimalEnvelopeGenerator.generate(babyGoatRoot, 20, 20, 20, 20, "objectBabyGoat");
         List<String> babyGoatLines = Arrays.asList(babyGoatEnvelope.split("\n"));
         objectShapes.put("objectBabyGoat", parseObject(babyGoatLines));
 
-        // ── Inject procedurally generated objectFreeWillGoat (stepping forward) ──
+        // ── Inject procedurally generated objectFreeWillGoat ─────────────────
         try {
-            // AnimalNode goatRoot = AnimalLoader.load("fpsjframe/animals/goat.txt");
-
-           FreeWill stepping = new FreeWill()
-                .override("leg_hip_fr",   new Vec3( 0.22f, -0.25f,  0.18f))  // half the Z push
-                .override("leg_knee_fr",  new Vec3( 0.0f,  -0.35f,  0.08f))  // half the Z
-                .override("leg_foot_fr",  new Vec3( 0.0f,  -0.28f,  0.02f)); // foot still hanging down
-
+            FreeWill stepping = new FreeWill()
+                .override("leg_hip_fr",   new Vec3( 0.22f, -0.25f,  0.18f))
+                .override("leg_knee_fr",  new Vec3( 0.0f,  -0.35f,  0.08f))
+                .override("leg_foot_fr",  new Vec3( 0.0f,  -0.28f,  0.02f));
             AnimalNode freeWillGoat = stepping.apply(goatRoot);
             String freeWillEnvelope = AnimalEnvelopeGenerator.generate(freeWillGoat, 20, 20, 20, 20, "objectFreeWillGoat");
-            List<String> freeWillLines = Arrays.asList(freeWillEnvelope.split("\n"));
-            objectShapes.put("objectFreeWillGoat", parseObject(freeWillLines));
+            objectShapes.put("objectFreeWillGoat", parseObject(Arrays.asList(freeWillEnvelope.split("\n"))));
         } catch (Exception e) {
             System.err.println("Failed to load freeWillGoat: " + e.getMessage());
         }
 
-        // ── Inject procedurally generated objectAbomination (axis calibration) ──
+        // ── Inject procedurally generated objectAbomination ──────────────────
         try {
             AnimalNode abomRoot = AnimalLoader.load("fpsjframe/animals/abomination.txt");
             String abomEnvelope = AnimalEnvelopeGenerator.generate(abomRoot, 20, 20, 20, 20, "objectAbomination");
-            List<String> abomLines = Arrays.asList(abomEnvelope.split("\n"));
-            objectShapes.put("objectAbomination", parseObject(abomLines));
+            objectShapes.put("objectAbomination", parseObject(Arrays.asList(abomEnvelope.split("\n"))));
         } catch (Exception e) {
             System.err.println("Failed to load abomination: " + e.getMessage());
         }
 
-        // ── Inject procedurally generated objectSkeletonHorse ────────────────
+        // ── Inject static skeleton horse poses (for world placement) ─────────
         try {
             AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
             String skelEnvelope = AnimalEnvelopeGenerator.generate(skelRoot, 20, 20, 20, 20, "objectSkeletonHorse");
-            List<String> skelLines = Arrays.asList(skelEnvelope.split("\n"));
-            objectShapes.put("objectSkeletonHorse", parseObject(skelLines));
+            objectShapes.put("objectSkeletonHorse", parseObject(Arrays.asList(skelEnvelope.split("\n"))));
         } catch (Exception e) {
             System.err.println("Failed to load skeletonHorse: " + e.getMessage());
         }
-
-        // ── Inject procedurally generated objectSkeletonHorseFreeWill ────────
-        try {
-            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
-
-              FreeWill stepping = new FreeWill()
-                // Front right leg — each segment bent at a different angle
-                .override("fr_upper", new Vec3( 0.25f,  0.0f,   0.3f))   // thigh swings forward
-                .override("fr_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))   // shin swings back
-                .override("fr_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))   // hoof swings forward
-
-                // Front left leg — bent outward
-                .override("fl_upper", new Vec3(-0.25f,  0.0f,   0.3f))
-                .override("fl_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))
-                .override("fl_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))
-
-                // Back right leg — bent backward
-                .override("br_upper", new Vec3( 0.25f,  0.0f,  -0.3f))
-                .override("br_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
-                .override("br_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f))
-
-                // Back left leg — bent backward
-                .override("bl_upper", new Vec3(-0.25f,  0.0f,  -0.3f))
-                .override("bl_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
-                .override("bl_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f));
-            AnimalNode freeWillSkel = stepping.apply(skelRoot);
-            String freeWillSkelEnvelope = AnimalEnvelopeGenerator.generate(freeWillSkel, 20, 20, 20, 20, "objectSkeletonHorseFreeWill");
-            List<String> freeWillSkelLines = Arrays.asList(freeWillSkelEnvelope.split("\n"));
-            objectShapes.put("objectSkeletonHorseFreeWill", parseObject(freeWillSkelLines));
-        } catch (Exception e) {
-            System.err.println("Failed to load skeletonHorseFreeWill: " + e.getMessage());
-        }
-
-        // ── Skeleton Horse: Right Forward Gait ───────────────────────────────
-        try {
-            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
-
-            FreeWill rightForward = new FreeWill()
-                // Front right — swings forward
-                .override("fr_upper", new Vec3( 0.25f,  0.0f,   0.3f))
-                .override("fr_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))
-                .override("fr_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))
-                // Back left — swings forward (opposite diagonal)
-                .override("bl_upper", new Vec3(-0.25f,  0.0f,  -0.3f))
-                .override("bl_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
-                .override("bl_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f));
-
-            AnimalNode posed = rightForward.apply(skelRoot);
-            String env = AnimalEnvelopeGenerator.generate(posed, 20, 20, 20, 20, "objectSkeletonHorseRightGait");
-            objectShapes.put("objectSkeletonHorseRightGait", parseObject(Arrays.asList(env.split("\n"))));
-        } catch (Exception e) {
-            System.err.println("Failed to load skeletonHorseRightGait: " + e.getMessage());
-        }
-
-        // ── Skeleton Horse: Left Forward Gait ────────────────────────────────
-        try {
-            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
-
-            FreeWill leftForward = new FreeWill()
-                // Front left — swings forward
-                .override("fl_upper", new Vec3(-0.25f,  0.0f,   0.3f))
-                .override("fl_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))
-                .override("fl_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))
-                // Back right — swings forward (opposite diagonal)
-                .override("br_upper", new Vec3( 0.25f,  0.0f,  -0.3f))
-                .override("br_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
-                .override("br_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f));
-
-            AnimalNode posed = leftForward.apply(skelRoot);
-            String env = AnimalEnvelopeGenerator.generate(posed, 20, 20, 20, 20, "objectSkeletonHorseLeftGait");
-            objectShapes.put("objectSkeletonHorseLeftGait", parseObject(Arrays.asList(env.split("\n"))));
-        } catch (Exception e) {
-            System.err.println("Failed to load skeletonHorseLeftGait: " + e.getMessage());
-        }
-
 
         if (worldNames == null)
             throw new IOException("No world envelope found.");
@@ -242,7 +160,7 @@ public class WorldBuilder {
 
         int worldRows = worldNames.length;
         int worldCols = worldNames[0].length;
-        chunkNames = worldNames;  // expose for minimap
+        chunkNames = worldNames;
 
         ChunkLayout[][] worldGrid = new ChunkLayout[worldRows][worldCols];
         for (int r = 0; r < worldRows; r++) {
@@ -319,10 +237,10 @@ public class WorldBuilder {
     // ─────────────────────────────────────────────────────────────────────────
 
     /** Parsed object envelope — OBJ_SIZE^3 voxel shape. */
-    private static class ObjectShape {
+    static class ObjectShape {
         final String name;
         final boolean[][][] voxels = new boolean[OBJ_SIZE][OBJ_SIZE][OBJ_SIZE];
-        int envX = OBJ_SIZE, envY = OBJ_SIZE, envZ = OBJ_SIZE; // actual envelope dimensions
+        int envX = OBJ_SIZE, envY = OBJ_SIZE, envZ = OBJ_SIZE;
         ObjectShape(String name) { this.name = name; }
     }
 
@@ -330,7 +248,7 @@ public class WorldBuilder {
     private static class ChunkLayout {
         final String name;
         final int cols, rows;
-        final String[][] objects;   // objects[col][row] → object name
+        final String[][] objects;
 
         ChunkLayout(String name, int cols, int rows, String[][] objects) {
             this.name    = name;
@@ -344,23 +262,14 @@ public class WorldBuilder {
     // Envelope parsers
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Parse an object envelope.
-     *
-     * Grid layout (after "---"):
-     *   8 slices separated by "===" → slice index = X axis (0 = left)
-     *   Each slice has 8 rows      → row 0 in file = top = y 7 (inverted)
-     *   Each row has 8 chars       → char index = Z axis (0 = front)
-     *   '#' (or any non-air legend value) = solid
-     */
-    /** Test-only entry point — parses an envelope string through the real parser. */
-    static boolean[][][] parseObjectForTest(String envelopeText) {
+    /** Test-only / EntityManager entry point — parses an envelope string. */
+    public static boolean[][][] parseObjectForTest(String envelopeText) {
         List<String> lines = Arrays.asList(envelopeText.split("\n"));
         ObjectShape shape = parseObject(lines);
         return shape.voxels;
     }
 
-    private static ObjectShape parseObject(List<String> lines) {
+    static ObjectShape parseObject(List<String> lines) {
         String name = header(lines, "name");
         Map<Character, String> legend = parseLegend(header(lines, "legend"));
         ObjectShape shape = new ObjectShape(name);
@@ -381,7 +290,7 @@ public class WorldBuilder {
         for (int x = 0; x < actualX; x++) {
             List<String> rows = slices.get(x);
             for (int row = 0; row < Math.min(OBJ_SIZE, rows.size()); row++) {
-                int y    = (OBJ_SIZE - 1) - row;  // row 0 = top = y (OBJ_SIZE-1)
+                int y    = (OBJ_SIZE - 1) - row;
                 String l = rows.get(row);
                 for (int z = 0; z < Math.min(OBJ_SIZE, l.length()); z++) {
                     String meaning = legend.getOrDefault(l.charAt(z), "air");
@@ -392,14 +301,6 @@ public class WorldBuilder {
         return shape;
     }
 
-    /**
-     * Parse a chunk envelope.
-     *
-     * Grid layout (after "---"):
-     *   Each row  → Z axis (row 0 = z 0)
-     *   Each char → X axis (col 0 = x 0)
-     *   Char maps via legend to an object name.
-     */
     private static ChunkLayout parseChunk(List<String> lines) {
         String name = header(lines, "name");
         Map<Character, String> legend = parseLegend(header(lines, "legend"));
@@ -419,10 +320,6 @@ public class WorldBuilder {
         return new ChunkLayout(name, cols, rows, objects);
     }
 
-    /**
-     * Parse a world envelope.
-     * Returns names[row][col] — chunk name for each world slot.
-     */
     private static String[][] parseWorldNames(List<String> lines) {
         Map<Character, String> legend = parseLegend(header(lines, "legend"));
         List<String> grid = gridLines(lines);
@@ -446,19 +343,14 @@ public class WorldBuilder {
     // ─────────────────────────────────────────────────────────────────────────
 
     private void stampObject(ObjectShape obj, int ox, int oz) {
-        // Centre the envelope in the slot on X and Z; sit it on the floor (y=0).
-        // If the envelope is smaller than OBJ_SIZE, offset so it's centred.
         int offX = (OBJ_SIZE - obj.envX) / 2;
         int offZ = (OBJ_SIZE - obj.envZ) / 2;
-        // Y: find the lowest solid voxel in the array and shift it to y=0.
-        // This ensures the object always sits on the ground regardless of
-        // how the envelope rows were mapped into the array.
         int minSolidY = OBJ_SIZE;
         for (int x = 0; x < OBJ_SIZE; x++)
             for (int y = 0; y < OBJ_SIZE; y++)
                 for (int z = 0; z < OBJ_SIZE; z++)
                     if (obj.voxels[x][y][z] && y < minSolidY) minSolidY = y;
-        int offY = (minSolidY == OBJ_SIZE) ? 0 : -minSolidY;  // shift lowest solid voxel to y=0
+        int offY = (minSolidY == OBJ_SIZE) ? 0 : -minSolidY;
 
         for (int x = 0; x < OBJ_SIZE; x++) {
             for (int y = 0; y < OBJ_SIZE; y++) {
@@ -477,15 +369,19 @@ public class WorldBuilder {
         }
     }
 
-    /** Choose a display colour based on object type and local voxel position. */
     private static Color pickColor(String objName, int x, int y, int z) {
         switch (objName) {
-            case "objectDirt":  return COL_DIRT;
-            case "objectBush":  return COL_BUSH_BODY;
-            case "objectTree":  return COL_TREE_LEAF;
-            case "objectCow":   return COL_COW;
-            case "objectHorse": return COL_HORSE;
-            default:            return COL_DEFAULT;
+            case "objectDirt":          return COL_DIRT;
+            case "objectBush":          return COL_BUSH_BODY;
+            case "objectTree":          return COL_TREE_LEAF;
+            case "objectCow":           return COL_COW;
+            case "objectHorse":         return COL_HORSE;
+            case "objectGoat":          return new Color(180, 160, 130);
+            case "objectBabyGoat":      return new Color(200, 185, 155);
+            case "objectFreeWillGoat":  return new Color(180, 160, 130);
+            case "objectAbomination":   return new Color(255,   0,   0);
+            case "objectSkeletonHorse": return new Color(220, 220, 220);
+            default:                    return COL_DEFAULT;
         }
     }
 
@@ -502,16 +398,14 @@ public class WorldBuilder {
         return out;
     }
 
-    /** Extract the value from a "key: value" header line. */
-    private static String header(List<String> lines, String key) {
+    static String header(List<String> lines, String key) {
         String prefix = key + ":";
         for (String l : lines)
             if (l.startsWith(prefix)) return l.substring(prefix.length()).trim();
         return "";
     }
 
-    /** Parse "a=objectDirt b=objectBush" into a char → name map. */
-    private static Map<Character, String> parseLegend(String raw) {
+    static Map<Character, String> parseLegend(String raw) {
         Map<Character, String> map = new HashMap<>();
         for (String token : raw.split("\\s+")) {
             if (token.length() >= 3 && token.charAt(1) == '=')
@@ -520,8 +414,7 @@ public class WorldBuilder {
         return map;
     }
 
-    /** Return only the lines that appear after the "---" separator. */
-    private static List<String> gridLines(List<String> lines) {
+    static List<String> gridLines(List<String> lines) {
         List<String> out = new ArrayList<>();
         boolean inGrid = false;
         for (String l : lines) {
@@ -531,8 +424,7 @@ public class WorldBuilder {
         return out;
     }
 
-    /** Split a flat line list into slices divided by "===" markers. */
-    private static List<List<String>> splitIntoSlices(List<String> lines) {
+    static List<List<String>> splitIntoSlices(List<String> lines) {
         List<List<String>> slices  = new ArrayList<>();
         List<String>       current = new ArrayList<>();
         for (String l : lines) {

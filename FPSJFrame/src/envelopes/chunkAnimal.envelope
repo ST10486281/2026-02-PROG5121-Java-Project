@@ -1,9 +1,9 @@
 name: chunkAnimal
 type: chunk
-legend: 0=objectDirt g=objectGoat l=objectBabyGoat t=objectTree b=objectBush f=objectFreeWillGoat a=objectAbomination h=objectSkeletonHorse r=objectSkeletonHorseRightGait l=objectSkeletonHorseLeftGait
+legend: 0=objectDirt g=objectGoat l=objectBabyGoat t=objectTree b=objectBush f=objectFreeWillGoat a=objectAbomination h=objectSkeletonHorse r=objectSkeletonHorse
 ---
 000ba
 00gf0
 0bt0
 0l000
-0rl00
+0rh00

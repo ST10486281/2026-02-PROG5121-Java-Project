@@ -9,8 +9,8 @@ import java.awt.image.BufferedImage;
  * FPSJFrame
  *
  * A DDA-based raycaster that renders the voxel world built by WorldBuilder.
- * Each vertical screen column fires one ray; wall height is computed from
- * the perpendicular distance to the first solid cell hit.
+ * Entities (animated animals) are managed by EntityManager and overlaid on
+ * the static world via the same raycaster.
  *
  * Controls
  *   W / Up     – move forward
@@ -33,21 +33,22 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     static final double MOVE_SPEED   = 1;
     static final double TURN_SPEED   = 0.1;
     static final double STRAFE_SPEED = 1;
-    static final double EYE_HEIGHT   = 10;     // cells above y = 0
-    static final double CELL_SCALE_H = 27.0;   // height  – how tall cells appear on screen
-    static final double CELL_SCALE_W = 1.0;    // width   – horizontal stretch (>1 = wider, <1 = narrower)
-    static final double CELL_SCALE_B = 1.0;    // breadth – depth compression  (>1 = closer, <1 = farther)
+    static final double EYE_HEIGHT   = 10;
+    static final double CELL_SCALE_H = 27.0;
+    static final double CELL_SCALE_W = 1.0;
+    static final double CELL_SCALE_B = 1.0;
 
     // ── player state ─────────────────────────────────────────────────────────
 
-    double px, pz;          // position in cell-space (X and Z are the ground plane)
-    double angle;           // yaw in radians (0 = +Z, π/2 = +X)
-    static final double FOV = Math.PI / 3.0;   // 60°
+    double px, pz;
+    double angle;
+    static final double FOV = Math.PI / 3.0;
 
-    // ── world ────────────────────────────────────────────────────────────────
+    // ── world & entities ─────────────────────────────────────────────────────
 
-    WorldBuilder world;
-    HUD hud;
+    WorldBuilder   world;
+    EntityManager  entityManager;
+    HUD            hud;
 
     // ── rendering ────────────────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         JFrame frame = new JFrame("FPS Voxel World");
         FPSJFrame game = new FPSJFrame();
         frame.add(game);
-        frame.setSize(SW, SH + 22);   // +22 for title bar
+        frame.setSize(SW, SH + 22);
         frame.setResizable(false);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setVisible(true);
@@ -92,10 +93,6 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         frameBuffer = new BufferedImage(SW, SH, BufferedImage.TYPE_INT_RGB);
         pixels      = ((java.awt.image.DataBufferInt) frameBuffer.getRaster().getDataBuffer()).getData();
 
-        // Load world from envelope files (same directory as the .class files, or adjust path)
-        // Envelopes live in src/envelopes/. Since the game is run from src/,
-        // the folder is simply "envelopes" relative to the working directory.
-        // Override with:  java -Denvelopes=<path> fpsjframe.FPSJFrame
         String envelopeDir = System.getProperty("envelopes", "envelopes");
         try {
             world = new WorldBuilder(envelopeDir);
@@ -106,16 +103,30 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             System.exit(1);
         }
 
+        // ── Entity system ─────────────────────────────────────────────────────
+        entityManager = new EntityManager(world);
+        try {
+            // Spawn a herd of skeleton horses
+            entityManager.spawn(entityManager.buildSkeletonHorse(60, 60));
+            entityManager.spawn(entityManager.buildSkeletonHorse(70, 65));
+            entityManager.spawn(entityManager.buildSkeletonHorse(65, 75));
+
+            // Spawn a few goats
+            entityManager.spawn(entityManager.buildGoat(80, 70));
+            entityManager.spawn(entityManager.buildGoat(85, 68));
+        } catch (Exception e) {
+            System.err.println("Failed to spawn entities: " + e.getMessage());
+        }
+
         respawn();
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Spawn player in an open area near the centre of the world
+    // Respawn
     // ─────────────────────────────────────────────────────────────────────────
 
     void respawn() {
         angle = 0;
-        // Start near the centre; scan outward until we find an open ground cell
         double cx = world.worldCellsX / 2.0;
         double cz = world.worldCellsZ / 2.0;
         for (int r = 0; r < 40; r++) {
@@ -127,7 +138,6 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 return;
             }
         }
-        // Fallback
         px = 1.5;
         pz = 1.5;
     }
@@ -145,10 +155,10 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             lastTime  = now;
 
             handleInput(dt);
+            entityManager.tick();   // ← advance all entity animations + AI
             renderFrame();
             repaint();
 
-            // ~60 fps cap
             try { Thread.sleep(16); } catch (InterruptedException ignored) {}
         }
     }
@@ -158,8 +168,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     // ─────────────────────────────────────────────────────────────────────────
 
     void handleInput(double dt) {
-        double speed   = MOVE_SPEED;
-        double strafe  = STRAFE_SPEED;
+        double speed  = MOVE_SPEED;
+        double strafe = STRAFE_SPEED;
 
         if (keys[KeyEvent.VK_W] || keys[KeyEvent.VK_UP])    tryMove( Math.sin(angle) * speed,  Math.cos(angle) * speed);
         if (keys[KeyEvent.VK_S] || keys[KeyEvent.VK_DOWN])  tryMove(-Math.sin(angle) * speed, -Math.cos(angle) * speed);
@@ -170,19 +180,15 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
         if (keys[KeyEvent.VK_R])                             respawn();
     }
 
-    /** Move with simple axis-separated collision and world boundary clamping. */
     void tryMove(double dx, double dz) {
         double nx = px + dx;
         double nz = pz + dz;
         int ey    = (int) EYE_HEIGHT;
 
-        // Clamp to world bounds (keep 1 cell margin so raycaster never goes OOB)
         nx = Math.max(1, Math.min(world.worldCellsX - 2, nx));
         nz = Math.max(1, Math.min(world.worldCellsZ - 2, nz));
 
-        // X axis
         if (!world.isSolid((int)(nx), ey, (int)(pz))) px = nx;
-        // Z axis
         if (!world.isSolid((int)(px), ey, (int)(nz))) pz = nz;
     }
 
@@ -195,14 +201,11 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
 
         for (int col = 0; col < SW; col++) {
 
-            // Ray direction for this screen column
-            // CELL_SCALE_W stretches columns away from centre (>1 = wider view = world appears narrower)
-            double normCol  = (col - SW / 2.0) / (SW / 2.0);   // -1 to +1
+            double normCol  = (col - SW / 2.0) / (SW / 2.0);
             double rayAngle = angle + Math.atan(Math.tan(FOV / 2.0) * normCol / CELL_SCALE_W);
             double rdx = Math.sin(rayAngle);
             double rdz = Math.cos(rayAngle);
 
-            // DDA setup -- steps one CELL at a time on the X/Z ground plane
             double posX = px;
             double posZ = pz;
 
@@ -220,9 +223,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             if (rdz < 0) { stepZ = -1; sideDistZ = (posZ - mapZ) * deltaDistZ; }
             else          { stepZ =  1; sideDistZ = (mapZ + 1.0 - posZ) * deltaDistZ; }
 
-            // Track painted rows so nearer cells always win over farther ones
             boolean[] rowPainted = new boolean[SH];
-
             int maxSteps = world.worldCellsX + world.worldCellsZ;
 
             for (int step = 0; step < maxSteps; step++) {
@@ -238,35 +239,37 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                     sideHit    = false;
                 }
 
-                // Perpendicular distance to this cell column (corrects fish-eye)
                 double perpDist = sideHit
                     ? (mapX - posX + (1 - stepX) / 2.0) / rdx
                     : (mapZ - posZ + (1 - stepZ) / 2.0) / rdz;
                 if (perpDist <= 0) perpDist = 0.001;
 
-                // How many pixels tall is one cell at this distance?
                 double cellScreenH = (double) SH / (WorldBuilder.WORLD_HEIGHT * (perpDist / CELL_SCALE_B)) * CELL_SCALE_H;
-
-                // Screen Y of the bottom of y=0 (ground level).
-                // Horizon is at SH/2; eye is EYE_HEIGHT cells above ground.
                 double groundScreenY = SH / 2.0 + EYE_HEIGHT * cellScreenH;
 
-                // Shade + fog factors shared across all y-layers in this column
                 float shade = sideHit ? 0.65f : 1.0f;
                 float fog   = (float) Math.max(0.1, 1.0 - perpDist / 80.0);
 
-                // Paint every solid y-layer individually.
-                // Air gaps (e.g. between trunk and canopy) stay transparent.
                 boolean anyHit = false;
                 for (int y = 0; y < WorldBuilder.WORLD_HEIGHT; y++) {
-                    if (!world.isSolid(mapX, y, mapZ)) continue;
+
+                    // ── check static world first, then entities ───────────────
+                    boolean solidHit = world.isSolid(mapX, y, mapZ)
+                                    || entityManager.isSolid(mapX, y, mapZ);
+                    if (!solidHit) continue;
                     anyHit = true;
 
-                    // Screen rows for this cell layer (y=0 on ground, y=7 at top)
                     int scrY0 = Math.max(0,       (int)(groundScreenY - (y + 1) * cellScreenH));
                     int scrY1 = Math.min(SH - 1,  (int)(groundScreenY - y       * cellScreenH));
 
-                    Color c  = world.getColor(mapX, y, mapZ);
+                    // ── pick colour: entity wins over world ───────────────────
+                    Color c;
+                    if (entityManager.isSolid(mapX, y, mapZ)) {
+                        c = entityManager.getColor(mapX, y, mapZ);
+                    } else {
+                        c = world.getColor(mapX, y, mapZ);
+                    }
+
                     float r  = (c.getRed()   / 255f) * shade * fog;
                     float g  = (c.getGreen() / 255f) * shade * fog;
                     float b  = (c.getBlue()  / 255f) * shade * fog;
@@ -280,8 +283,6 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                     }
                 }
 
-                // Early-out: if this column was fully solid and filled every
-                // visible screen row, nothing behind it can be seen.
                 if (anyHit) {
                     int topRow = Math.max(0,      (int)(groundScreenY - WorldBuilder.WORLD_HEIGHT * cellScreenH));
                     int botRow = Math.min(SH - 1, (int) groundScreenY);
@@ -293,24 +294,19 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 }
             }
         }
-
     }
 
-
-    /** Draw sky gradient and floor gradient into the pixel buffer. */
     void drawBackground() {
         int midY = SH / 2;
         for (int y = 0; y < SH; y++) {
             int rgb;
             if (y < midY) {
-                // Sky: gradient from top to horizon
                 float t   = (float) y / midY;
                 float r   = lerp(SKY_TOP.getRed(),   SKY_BTM.getRed(),   t) / 255f;
                 float g   = lerp(SKY_TOP.getGreen(), SKY_BTM.getGreen(), t) / 255f;
                 float b   = lerp(SKY_TOP.getBlue(),  SKY_BTM.getBlue(),  t) / 255f;
                 rgb = toRGB(r, g, b);
             } else {
-                // Floor: gradient from horizon to bottom
                 float t   = (float)(y - midY) / (SH - midY);
                 float r   = lerp(FLOOR_COL.getRed(),   FLOOR_DARK.getRed(),   t) / 255f;
                 float g   = lerp(FLOOR_COL.getGreen(), FLOOR_DARK.getGreen(), t) / 255f;
