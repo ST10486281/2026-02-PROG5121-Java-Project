@@ -164,18 +164,74 @@ public class WorldBuilder {
         try {
             AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
 
-            FreeWill stepping = new FreeWill()
-                // Front right leg raised forward — upper swings forward, lower hangs, hoof down
-                .override("fr_upper", new Vec3( 0.25f,  0.15f,  0.4f))   // hip swings forward and up
-                .override("fr_lower", new Vec3( 0.0f,  -0.4f,   0.15f))  // knee hangs forward
-                .override("fr_hoof",  new Vec3( 0.0f,  -0.4f,   0.0f));  // hoof hangs straight down
+              FreeWill stepping = new FreeWill()
+                // Front right leg — each segment bent at a different angle
+                .override("fr_upper", new Vec3( 0.25f,  0.0f,   0.3f))   // thigh swings forward
+                .override("fr_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))   // shin swings back
+                .override("fr_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))   // hoof swings forward
 
+                // Front left leg — bent outward
+                .override("fl_upper", new Vec3(-0.25f,  0.0f,   0.3f))
+                .override("fl_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))
+                .override("fl_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))
+
+                // Back right leg — bent backward
+                .override("br_upper", new Vec3( 0.25f,  0.0f,  -0.3f))
+                .override("br_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
+                .override("br_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f))
+
+                // Back left leg — bent backward
+                .override("bl_upper", new Vec3(-0.25f,  0.0f,  -0.3f))
+                .override("bl_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
+                .override("bl_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f));
             AnimalNode freeWillSkel = stepping.apply(skelRoot);
             String freeWillSkelEnvelope = AnimalEnvelopeGenerator.generate(freeWillSkel, 20, 20, 20, 20, "objectSkeletonHorseFreeWill");
             List<String> freeWillSkelLines = Arrays.asList(freeWillSkelEnvelope.split("\n"));
             objectShapes.put("objectSkeletonHorseFreeWill", parseObject(freeWillSkelLines));
         } catch (Exception e) {
             System.err.println("Failed to load skeletonHorseFreeWill: " + e.getMessage());
+        }
+
+        // ── Skeleton Horse: Right Forward Gait ───────────────────────────────
+        try {
+            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
+
+            FreeWill rightForward = new FreeWill()
+                // Front right — swings forward
+                .override("fr_upper", new Vec3( 0.25f,  0.0f,   0.3f))
+                .override("fr_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))
+                .override("fr_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))
+                // Back left — swings forward (opposite diagonal)
+                .override("bl_upper", new Vec3(-0.25f,  0.0f,  -0.3f))
+                .override("bl_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
+                .override("bl_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f));
+
+            AnimalNode posed = rightForward.apply(skelRoot);
+            String env = AnimalEnvelopeGenerator.generate(posed, 20, 20, 20, 20, "objectSkeletonHorseRightGait");
+            objectShapes.put("objectSkeletonHorseRightGait", parseObject(Arrays.asList(env.split("\n"))));
+        } catch (Exception e) {
+            System.err.println("Failed to load skeletonHorseRightGait: " + e.getMessage());
+        }
+
+        // ── Skeleton Horse: Left Forward Gait ────────────────────────────────
+        try {
+            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
+
+            FreeWill leftForward = new FreeWill()
+                // Front left — swings forward
+                .override("fl_upper", new Vec3(-0.25f,  0.0f,   0.3f))
+                .override("fl_lower", new Vec3( 0.0f,  -0.3f,  -0.3f))
+                .override("fl_hoof",  new Vec3( 0.0f,  -0.3f,   0.3f))
+                // Back right — swings forward (opposite diagonal)
+                .override("br_upper", new Vec3( 0.25f,  0.0f,  -0.3f))
+                .override("br_lower", new Vec3( 0.0f,  -0.3f,   0.3f))
+                .override("br_hoof",  new Vec3( 0.0f,  -0.3f,  -0.3f));
+
+            AnimalNode posed = leftForward.apply(skelRoot);
+            String env = AnimalEnvelopeGenerator.generate(posed, 20, 20, 20, 20, "objectSkeletonHorseLeftGait");
+            objectShapes.put("objectSkeletonHorseLeftGait", parseObject(Arrays.asList(env.split("\n"))));
+        } catch (Exception e) {
+            System.err.println("Failed to load skeletonHorseLeftGait: " + e.getMessage());
         }
 
 
