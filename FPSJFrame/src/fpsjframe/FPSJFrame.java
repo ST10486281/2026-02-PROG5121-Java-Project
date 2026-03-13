@@ -103,17 +103,15 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             System.exit(1);
         }
 
-        // ── Entity system ─────────────────────────────────────────────────────
-        entityManager = new EntityManager(world);
+        // ── Entity system — fixed positions, animation only ─────────────────
+        entityManager = new EntityManager();
+        int cx = world.worldCellsX / 2;
+        int cz = world.worldCellsZ / 2;
         try {
-            // Spawn a herd of skeleton horses
-            entityManager.spawn(entityManager.buildSkeletonHorse(60, 60));
-            entityManager.spawn(entityManager.buildSkeletonHorse(70, 65));
-            entityManager.spawn(entityManager.buildSkeletonHorse(65, 75));
-
-            // Spawn a few goats
-            entityManager.spawn(entityManager.buildGoat(80, 70));
-            entityManager.spawn(entityManager.buildGoat(85, 68));
+            entityManager.spawn(entityManager.buildSkeletonHorse(cx + 10, cz));
+            entityManager.spawn(entityManager.buildSkeletonHorse(cx + 20, cz + 10));
+            entityManager.spawn(entityManager.buildGoat(cx + 15, cz - 10));
+            entityManager.spawn(entityManager.buildGoat(cx + 25, cz - 5));
         } catch (Exception e) {
             System.err.println("Failed to spawn entities: " + e.getMessage());
         }
@@ -155,7 +153,8 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             lastTime  = now;
 
             handleInput(dt);
-            entityManager.tick();   // ← advance all entity animations + AI
+            entityManager.setPlayerPosition(px, pz);
+            entityManager.tick();   // ← only ticks entities within ACTIVE_RADIUS
             renderFrame();
             repaint();
 
