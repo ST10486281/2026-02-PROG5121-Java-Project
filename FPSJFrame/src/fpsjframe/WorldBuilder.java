@@ -5,6 +5,8 @@ import java.io.*;
 import java.util.*;
 import fpsjframe.animalgeneration.AnimalLoader;
 import fpsjframe.animalgeneration.AnimalNode;
+import fpsjframe.animalgeneration.FreeWill;
+import fpsjframe.animalgeneration.Vec3;
 /**
  * WorldBuilder
  *
@@ -110,20 +112,71 @@ public class WorldBuilder {
         objectShapes.put("objectHorse", parseObject(horseLines));
 
         // ── Inject procedurally generated objectGoat ─────────────────────────
-        try {
-            AnimalNode goatRoot = AnimalLoader.load("fpsjframe/animals/goat.txt");
-            String goatEnvelope = AnimalEnvelopeGenerator.generate(goatRoot, 20, 20, 20, 20, "objectGoat");
-            List<String> goatLines = Arrays.asList(goatEnvelope.split("\n"));
-            objectShapes.put("objectGoat", parseObject(goatLines));
-        } catch (Exception e) {
-            System.err.println("Failed to load goat: " + e.getMessage());
-        }
+        AnimalNode goatRoot = AnimalLoader.load("fpsjframe/animals/goat.txt");
+        String goatEnvelope = AnimalEnvelopeGenerator.generate(goatRoot, 20, 20, 20, 20, "objectGoat");
+        List<String> goatLines = Arrays.asList(goatEnvelope.split("\n"));
+        objectShapes.put("objectGoat", parseObject(goatLines));
 
 
         AnimalNode babyGoatRoot = AnimalLoader.load("fpsjframe/animals/babygoat.txt");
         String babyGoatEnvelope = AnimalEnvelopeGenerator.generate(babyGoatRoot, 20, 20, 20, 20, "objectBabyGoat");
         List<String> babyGoatLines = Arrays.asList(babyGoatEnvelope.split("\n"));
         objectShapes.put("objectBabyGoat", parseObject(babyGoatLines));
+
+        // ── Inject procedurally generated objectFreeWillGoat (stepping forward) ──
+        try {
+            // AnimalNode goatRoot = AnimalLoader.load("fpsjframe/animals/goat.txt");
+
+           FreeWill stepping = new FreeWill()
+                .override("leg_hip_fr",   new Vec3( 0.22f, -0.25f,  0.18f))  // half the Z push
+                .override("leg_knee_fr",  new Vec3( 0.0f,  -0.35f,  0.08f))  // half the Z
+                .override("leg_foot_fr",  new Vec3( 0.0f,  -0.28f,  0.02f)); // foot still hanging down
+
+            AnimalNode freeWillGoat = stepping.apply(goatRoot);
+            String freeWillEnvelope = AnimalEnvelopeGenerator.generate(freeWillGoat, 20, 20, 20, 20, "objectFreeWillGoat");
+            List<String> freeWillLines = Arrays.asList(freeWillEnvelope.split("\n"));
+            objectShapes.put("objectFreeWillGoat", parseObject(freeWillLines));
+        } catch (Exception e) {
+            System.err.println("Failed to load freeWillGoat: " + e.getMessage());
+        }
+
+        // ── Inject procedurally generated objectAbomination (axis calibration) ──
+        try {
+            AnimalNode abomRoot = AnimalLoader.load("fpsjframe/animals/abomination.txt");
+            String abomEnvelope = AnimalEnvelopeGenerator.generate(abomRoot, 20, 20, 20, 20, "objectAbomination");
+            List<String> abomLines = Arrays.asList(abomEnvelope.split("\n"));
+            objectShapes.put("objectAbomination", parseObject(abomLines));
+        } catch (Exception e) {
+            System.err.println("Failed to load abomination: " + e.getMessage());
+        }
+
+        // ── Inject procedurally generated objectSkeletonHorse ────────────────
+        try {
+            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
+            String skelEnvelope = AnimalEnvelopeGenerator.generate(skelRoot, 20, 20, 20, 20, "objectSkeletonHorse");
+            List<String> skelLines = Arrays.asList(skelEnvelope.split("\n"));
+            objectShapes.put("objectSkeletonHorse", parseObject(skelLines));
+        } catch (Exception e) {
+            System.err.println("Failed to load skeletonHorse: " + e.getMessage());
+        }
+
+        // ── Inject procedurally generated objectSkeletonHorseFreeWill ────────
+        try {
+            AnimalNode skelRoot = AnimalLoader.load("fpsjframe/animals/skeletonhorse.txt");
+
+            FreeWill stepping = new FreeWill()
+                // Front right leg raised forward — upper swings forward, lower hangs, hoof down
+                .override("fr_upper", new Vec3( 0.25f,  0.15f,  0.4f))   // hip swings forward and up
+                .override("fr_lower", new Vec3( 0.0f,  -0.4f,   0.15f))  // knee hangs forward
+                .override("fr_hoof",  new Vec3( 0.0f,  -0.4f,   0.0f));  // hoof hangs straight down
+
+            AnimalNode freeWillSkel = stepping.apply(skelRoot);
+            String freeWillSkelEnvelope = AnimalEnvelopeGenerator.generate(freeWillSkel, 20, 20, 20, 20, "objectSkeletonHorseFreeWill");
+            List<String> freeWillSkelLines = Arrays.asList(freeWillSkelEnvelope.split("\n"));
+            objectShapes.put("objectSkeletonHorseFreeWill", parseObject(freeWillSkelLines));
+        } catch (Exception e) {
+            System.err.println("Failed to load skeletonHorseFreeWill: " + e.getMessage());
+        }
 
 
         if (worldNames == null)

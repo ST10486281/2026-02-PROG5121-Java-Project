@@ -1,0 +1,20 @@
+# Calibration animal — stands on Y leg, X and Z legs hover
+# Y leg points straight DOWN to ground
+# X leg points left/right horizontally
+# Z leg points forward/backward horizontally
+
+name: abomination
+
+bone: root      none   abs  0.0  0.5  0.5  abs  1.0  phantom
+
+# Body sits mid-air
+bone: body      root   rel  0.0  0.0  0.0  abs  0.2
+
+# Standing leg — points straight down
+bone: leg_y     body   rel  0.0  -0.9  0.0  abs  0.15
+
+# Hovering leg — points along X
+bone: leg_x     body   rel  0.9   0.0  0.0  abs  0.15
+
+# Hovering leg — points along Z
+bone: leg_z     body   rel  0.0   0.0  0.9  abs  0.15
