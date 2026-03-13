@@ -47,7 +47,6 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
     // ── world & entities ─────────────────────────────────────────────────────
 
     WorldBuilder   world;
-    EntityManager  entityManager;
     HUD            hud;
 
     // ── rendering ────────────────────────────────────────────────────────────
@@ -103,18 +102,7 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             System.exit(1);
         }
 
-        // ── Entity system — fixed positions, animation only ─────────────────
-        entityManager = new EntityManager();
-        int cx = world.worldCellsX / 2;
-        int cz = world.worldCellsZ / 2;
-        try {
-            entityManager.spawn(entityManager.buildSkeletonHorse(cx + 10, cz));
-            entityManager.spawn(entityManager.buildSkeletonHorse(cx + 20, cz + 10));
-            entityManager.spawn(entityManager.buildGoat(cx + 15, cz - 10));
-            entityManager.spawn(entityManager.buildGoat(cx + 25, cz - 5));
-        } catch (Exception e) {
-            System.err.println("Failed to spawn entities: " + e.getMessage());
-        }
+
 
         respawn();
     }
@@ -153,8 +141,6 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
             lastTime  = now;
 
             handleInput(dt);
-            entityManager.setPlayerPosition(px, pz);
-            entityManager.tick();   // ← only ticks entities within ACTIVE_RADIUS
             renderFrame();
             repaint();
 
@@ -252,22 +238,13 @@ public class FPSJFrame extends JPanel implements KeyListener, Runnable {
                 boolean anyHit = false;
                 for (int y = 0; y < WorldBuilder.WORLD_HEIGHT; y++) {
 
-                    // ── check static world first, then entities ───────────────
-                    boolean solidHit = world.isSolid(mapX, y, mapZ)
-                                    || entityManager.isSolid(mapX, y, mapZ);
-                    if (!solidHit) continue;
+                    if (!world.isSolid(mapX, y, mapZ)) continue;
                     anyHit = true;
 
                     int scrY0 = Math.max(0,       (int)(groundScreenY - (y + 1) * cellScreenH));
                     int scrY1 = Math.min(SH - 1,  (int)(groundScreenY - y       * cellScreenH));
 
-                    // ── pick colour: entity wins over world ───────────────────
-                    Color c;
-                    if (entityManager.isSolid(mapX, y, mapZ)) {
-                        c = entityManager.getColor(mapX, y, mapZ);
-                    } else {
-                        c = world.getColor(mapX, y, mapZ);
-                    }
+                    Color c = world.getColor(mapX, y, mapZ);
 
                     float r  = (c.getRed()   / 255f) * shade * fog;
                     float g  = (c.getGreen() / 255f) * shade * fog;

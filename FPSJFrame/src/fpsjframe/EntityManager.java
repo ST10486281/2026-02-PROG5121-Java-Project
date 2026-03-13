@@ -50,19 +50,27 @@ public class EntityManager {
     }
 
     public void tick() {
-        cellMap.clear();
+        boolean anyChanged = false;
         for (Entity e : entities) {
             if (!isNearPlayer(e)) continue;
-            e.tick(); // advance animation
-            // stamp entity voxels into cell map
-            int minX = e.worldMinX();
-            int minZ = e.worldMinZ();
-            for (int lx = 0; lx < Entity.SIZE; lx++)
-                for (int ly = 0; ly < Entity.SIZE; ly++)
-                    for (int lz = 0; lz < Entity.SIZE; lz++)
-                        if (e.isSolid(lx, ly, lz))
-                            cellMap.put(key(minX + lx, ly, minZ + lz),
-                                        e.getColor(lx, ly, lz));
+            boolean changed = e.tick(); // returns true if pose flipped
+            if (changed) anyChanged = true;
+        }
+
+        // Only rebuild the cell map when a pose actually changed
+        if (anyChanged || cellMap.isEmpty()) {
+            cellMap.clear();
+            for (Entity e : entities) {
+                if (!isNearPlayer(e)) continue;
+                int minX = e.worldMinX();
+                int minZ = e.worldMinZ();
+                for (int lx = 0; lx < Entity.SIZE; lx++)
+                    for (int ly = 0; ly < Entity.SIZE; ly++)
+                        for (int lz = 0; lz < Entity.SIZE; lz++)
+                            if (e.isSolid(lx, ly, lz))
+                                cellMap.put(key(minX + lx, ly, minZ + lz),
+                                            e.getColor(lx, ly, lz));
+            }
         }
     }
 

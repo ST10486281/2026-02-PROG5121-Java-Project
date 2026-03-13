@@ -57,12 +57,14 @@ public class Entity {
         return c != null ? c : Color.GRAY;
     }
 
-    /** Advance animation by one frame. */
-    public void tick() {
+    /** Advance animation by one frame. Returns true if the pose changed. */
+    public boolean tick() {
         tickCounter++;
         if (tickCounter >= ticksPerPose) {
             tickCounter = 0;
             poseIndex   = (poseIndex + 1) % poses.length;
+            return true;  // pose flipped — cell map needs rebuild
         }
+        return false;
     }
 }
