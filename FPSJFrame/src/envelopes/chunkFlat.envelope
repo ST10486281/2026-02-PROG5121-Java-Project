@@ -1,14 +1,9 @@
 name: chunkFlat
 type: chunk
-legend: 0=objectDirt c=objectCow
+legend: 0=objectDirt c=objectCow h=objectHorse
 ---
-0000000000
-0000000000
-0000000000
-0000000000
-000c000000
-0000000000
-0000000000
-0000000000
-0000000000
-0000000000
+00000
+00h00
+00000
+00c00
+00000

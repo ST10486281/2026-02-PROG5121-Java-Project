@@ -44,6 +44,7 @@ public class WorldBuilder {
     private static final Color COL_TREE_LEAF  = new Color( 34,  90,  30);
     private static final Color COL_TREE_TRUNK = new Color( 90,  60,  30);
     private static final Color COL_COW        = new Color(220, 210, 195);
+    private static final Color COL_HORSE      = new Color(139,  90,  43);
     private static final Color COL_DEFAULT    = new Color(160, 160, 160);
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -102,6 +103,13 @@ public class WorldBuilder {
         List<String> cowLines = Arrays.asList(cowEnvelope.split("\n"));
         objectShapes.put("objectCow", parseObject(cowLines));
 
+        // ── Inject procedurally generated objectHorse (parametric body) ──────
+        String horseEnvelope = HorseEnvelopeGenerator.generate();
+        List<String> horseLines = Arrays.asList(horseEnvelope.split("\n"));
+        objectShapes.put("objectHorse", parseObject(horseLines));
+
+             
+
         if (worldNames == null)
             throw new IOException("No world envelope found.");
 
@@ -146,7 +154,10 @@ public class WorldBuilder {
                     for (int objRow = 0; objRow < chunk.rows; objRow++) {
 
                         ObjectShape obj = objectShapes.get(chunk.objects[objCol][objRow]);
-                        if (obj == null) continue;
+                        if (obj == null) {
+                            System.err.println("DEBUG: missing shape for '" + chunk.objects[objCol][objRow] + "'");
+                            continue;
+                        }
 
                         int ox = chunkOriginX + (chunk.cols - 1 - objCol) * OBJ_SIZE;
                         int oz = chunkOriginZ + objRow * OBJ_SIZE;
@@ -348,6 +359,7 @@ public class WorldBuilder {
             case "objectBush":  return COL_BUSH_BODY;
             case "objectTree":  return COL_TREE_LEAF;
             case "objectCow":   return COL_COW;
+            case "objectHorse": return COL_HORSE;
             default:            return COL_DEFAULT;
         }
     }
