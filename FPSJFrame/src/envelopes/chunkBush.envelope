@@ -1,0 +1,9 @@
+name: chunkBush
+type: chunk
+legend: 0=objectDirt 1=objectBush
+---
+10101
+01010
+10101
+01010
+10101

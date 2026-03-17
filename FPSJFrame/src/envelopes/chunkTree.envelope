@@ -1,0 +1,9 @@
+name: chunkTree
+type: chunk
+legend: 0=objectDirt t=objectTree 1=objectBush
+---
+1t101
+01010
+101t1
+01010
+1t101

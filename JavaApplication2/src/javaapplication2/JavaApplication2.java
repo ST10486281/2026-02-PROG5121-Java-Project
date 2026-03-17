@@ -1,40 +1,55 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Main.java to edit this template
- */
-package javaapplication2;
-
+import java.util.ArrayList;
 import java.util.Scanner;
 
-/**
- *
- * @author lab_services_student
- */
 public class JavaApplication2 {
 
-    /**
-     * @param args the command line arguments
-     */
-    public static void main(String[] args) {
-        // TODO code application logic here
-        // String myName = "Riko";
-        // char in = 'd';
-        // int age = 8;
-        // double exactAge = 8.95;
-        // System.out.print("Hello " + myName);
-        // System.out.println("/Please enter you id.");
-        // // return void;
+    static class Item {
+        double price;
+        int quantity;
 
-        Scanner input = new Scanner(System.in);
+        Item(double price, int quantity) {
+            this.price = price;
+            this.quantity = quantity;
+        }
 
-        System.out.print("Enter your name: ");
-        String name = input.nextLine();
-
-        System.out.println("\nHello \t" + name);
+        double getTotal() {
+            return price * quantity;
+        }
     }
 
-    // int methodExample(){
+    public static void main(String[] args) {
 
-    // }
+        Scanner scanner = new Scanner(System.in);
+        ArrayList<Item> items = new ArrayList<>();
+        double grandTotal = 0;
+        String choice;
 
+        do {
+            System.out.print("Enter price: ");
+            double price = scanner.nextDouble();
+
+            System.out.print("Enter quantity: ");
+            int quantity = scanner.nextInt();
+
+            items.add(new Item(price, quantity));
+
+            System.out.print("Add another item? (yes/no): ");
+            choice = scanner.next();
+
+        } while (choice.equalsIgnoreCase("yes"));
+
+        System.out.println("----- Checkout Breakdown -----");
+
+        for (Item item : items) {
+            System.out.println("Price: R" + item.price +
+                    " | Quantity: " + item.quantity +
+                    " | Total: R" + item.getTotal());
+
+            grandTotal += item.getTotal();
+        }
+
+        System.out.println("Grand Total: R" + grandTotal);
+
+        scanner.close();
+    }
 }

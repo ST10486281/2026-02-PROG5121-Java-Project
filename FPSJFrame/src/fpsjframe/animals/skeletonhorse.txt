@@ -1,0 +1,37 @@
+# Skeleton Horse — thin but visible bones
+
+name: skeletonhorse
+
+bone: root          none            abs   0.0   0.5   0.5   abs  1.0   phantom
+
+# Thin but visible spine
+bone: torso_mid     root            rel   0.0   0.0   0.0   abs  0.18
+bone: torso_front   torso_mid       rel   0.0   0.0   0.6   abs  0.18
+bone: torso_back    torso_mid       rel   0.0   0.0  -0.6   abs  0.18
+
+# Neck and head
+bone: neck          torso_front     rel   0.0   0.5   0.2   abs  0.15
+bone: head          neck            rel   0.0   0.3   0.15  abs  0.18
+
+# Front left leg
+bone: fl_upper      torso_front     rel  -0.25  0.0   0.0   abs  0.14  front left
+bone: fl_lower      fl_upper        rel   0.0  -0.5   0.0   abs  0.12  front left
+bone: fl_hoof       fl_lower        rel   0.0  -0.4   0.0   abs  0.12  front left
+
+# Front right leg
+bone: fr_upper      torso_front     rel   0.25  0.0   0.0   abs  0.14  front right
+bone: fr_lower      fr_upper        rel   0.0  -0.5   0.0   abs  0.12  front right
+bone: fr_hoof       fr_lower        rel   0.0  -0.4   0.0   abs  0.12  front right
+
+# Back left leg
+bone: bl_upper      torso_back      rel  -0.25  0.0   0.0   abs  0.14  back left
+bone: bl_lower      bl_upper        rel   0.0  -0.5   0.0   abs  0.12  back left
+bone: bl_hoof       bl_lower        rel   0.0  -0.4   0.0   abs  0.12  back left
+
+# Back right leg
+bone: br_upper      torso_back      rel   0.25  0.0   0.0   abs  0.14  back right
+bone: br_lower      br_upper        rel   0.0  -0.5   0.0   abs  0.12  back right
+bone: br_hoof       br_lower        rel   0.0  -0.4   0.0   abs  0.12  back right
+
+# Tail
+bone: tail          torso_back      rel   0.0   0.1  -0.4   abs  0.1
